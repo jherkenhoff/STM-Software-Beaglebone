@@ -1,0 +1,26 @@
+--- uEnv.txt.old	2020-07-17 23:10:59.604442815 +0000
++++ uEnv.txt	2020-07-17 23:31:10.619628287 +0000
+@@ -16,18 +16,18 @@
+ #uboot_overlay_addr3=/lib/firmware/<file3>.dtbo
+ ###
+ ###Additional custom capes
+-#uboot_overlay_addr4=/lib/firmware/<file4>.dtbo
++uboot_overlay_addr4=/lib/firmware/STM-00A0.dtbo
+ #uboot_overlay_addr5=/lib/firmware/<file5>.dtbo
+ #uboot_overlay_addr6=/lib/firmware/<file6>.dtbo
+ #uboot_overlay_addr7=/lib/firmware/<file7>.dtbo
+ ###
+ ###Custom Cape
+-#dtb_overlay=/lib/firmware/<file8>.dtbo
++dtb_overlay=/lib/firmware/STM-00A0.dtbo
+ ###
+ ###Disable auto loading of virtual capes (emmc/video/wireless/adc)
+-#disable_uboot_overlay_emmc=1
+-#disable_uboot_overlay_video=1
+-#disable_uboot_overlay_audio=1
++disable_uboot_overlay_emmc=1
++disable_uboot_overlay_video=1
++disable_uboot_overlay_audio=1
+ #disable_uboot_overlay_wireless=1
+ #disable_uboot_overlay_adc=1
+ ###

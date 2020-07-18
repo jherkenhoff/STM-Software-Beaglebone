@@ -1,0 +1,11 @@
+--- /etc/vsftpd.conf.old	2020-07-17 17:30:06.377462388 +0000
++++ /etc/vsftpd.conf	2020-07-17 17:34:25.516842013 +0000
+@@ -28,7 +28,7 @@
+ local_enable=YES
+ #
+ # Uncomment this to enable any form of FTP write command.
+-#write_enable=YES
++write_enable=YES
+ #
+ # Default umask for local users is 077. You may wish to change this to 022,
+ # if your users expect that (022 is used by most other ftpd's)
