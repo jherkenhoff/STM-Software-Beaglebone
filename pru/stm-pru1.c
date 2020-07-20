@@ -8,7 +8,7 @@
 #include <pru_rpmsg.h>
 
 #include "resource_table_0.h"
-#include "stm_pins.h"
+#include "stm_config.h"
 
 volatile register uint32_t __R30;
 volatile register uint32_t __R31;
@@ -27,16 +27,16 @@ volatile register uint32_t __R31;
 #define VIRTIO_CONFIG_S_DRIVER_OK	4
 uint8_t payload[RPMSG_BUF_SIZE];
 
-void receive_adc_value() {
-	  size_t i;
-		for (i = 0; i < 18; i++) {
-			  // Sample bit on falling clock edge
-				CLR_BIT(__R30, PIN_DAC_CLK);
-				__delay_cycles(10);
-				// TODO: Sample
-				SET_BIT(__R30, PIN_DAC_CLK);
-				__delay_cycles(10);
-		}
+void write_dac_value(uint32_t value, uint32_t cs_pin) {
+	size_t i;
+	for (i = 0; i < DAC_DATA_WIDTH; i++) {
+		// Sample bit on falling clock edge
+		CLR_BIT(__R30, PIN_DAC_CLK);
+		__delay_cycles(10);
+		// TODO: Sample
+		SET_BIT(__R30, PIN_DAC_CLK);
+		__delay_cycles(10);
+	}
 }
 
 
@@ -64,7 +64,7 @@ void main(void) {
 
 		/* TODO: Create stop condition, else it will toggle indefinitely */
 		while (1) {
-				receive_adc_value();
+				write_dac_value(0, PIN_DAC_CS_X);
 
 				if (__R31 & HOST_INT) {
 						/* Clear the event status */

@@ -8,7 +8,7 @@
 #include <pru_rpmsg.h>
 
 #include "resource_table_0.h"
-#include "stm_pins.h"
+#include "stm_config.h"
 
 volatile register uint32_t __R30;
 volatile register uint32_t __R31;
@@ -29,7 +29,7 @@ uint8_t payload[RPMSG_BUF_SIZE];
 
 void receive_adc_value() {
 	  size_t i;
-		for (i = 0; i < 18; i++) {
+		for (i = 0; i < ADC_DATA_WIDTH; i++) {
 			  // Sample bit on falling clock edge
 				CLR_BIT(__R30, PIN_ADC_CLK);
 				__delay_cycles(10);
@@ -38,7 +38,6 @@ void receive_adc_value() {
 				__delay_cycles(10);
 		}
 }
-
 
 void main(void) {
 
