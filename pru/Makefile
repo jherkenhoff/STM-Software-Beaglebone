@@ -1,87 +1,72 @@
-
-TARGET=main.pru0
 PRU_CGT:=/usr/share/ti/cgt-pru
 PRU_SUPPORT:=/usr/lib/ti/pru-software-support-package
 TIDL_API_DIR:=/usr/share/ti/tidl/tidl_api
 BUILD_DIR:=build
-MODEL:=$(shell cat /proc/device-tree/model | sed 's/ /_/g' | tr -d '\000')
+MAP=$(BUILD_DIR)/stm.map
 LINKER_COMMAND_FILE=./AM335x_PRU.cmd
 
 CHIP=am335x
 CHIP_REV=am335x
-PROC=pru
-PRU_DIR=/dev/remoteproc/pruss-core0
+PRU0_DIR=/dev/remoteproc/pruss-core0
+PRU1_DIR=/dev/remoteproc/pruss-core1
 PRUN=0
 #PRU_DIR=/dev/remoteproc/pruss-core1
 #PRUN=1
-EXE=.out
-
-LD=lnkpru -o
-LDFLAGS=--reread_libs --warn_sections --stack_size=0x100 --heap_size=0x100 -m $(basename $(1)).map \
--i$(PRU_CGT)/lib -i$(PRU_CGT)/include $(LINKER_COMMAND_FILE) --library=libc.a \
---library=$(PRU_SUPPORT)/lib/rpmsg_lib.lib
 
 CC=clpru -fe
 CFLAGS=--include_path=$(PRU_SUPPORT)/include \
 --include_path=$(PRU_SUPPORT)/include/$(CHIP_REV) \
---include_path=$(PRU_CGT)/include -DPRUN=$(PRUN)\
+--include_path=$(PRU_CGT)/include \
 -v3 -O2 --printf_support=minimal --display_error_number --endian=little --hardware_mac=on \
 --obj_directory=$(BUILD_DIR) --pp_directory=$(BUILD_DIR) --asm_directory=$(BUILD_DIR) -ppd -ppa --asm_listing \
 --c_src_interlist
 
-all: stop install start
-	@echo "MODEL   = $(MODEL)"
-	@echo "PROC    = $(PROC)"
-	@echo "PRUN    = $(PRUN)"
-	@echo "PRU_DIR = $(PRU_DIR)"
+LD=lnkpru -o
+LDFLAGS=--reread_libs --warn_sections --stack_size=0x100 --heap_size=0x100 \
+-i$(PRU_CGT)/lib -i$(PRU_CGT)/include -m$(MAP) $(LINKER_COMMAND_FILE) --library=libc.a \
+--library=$(PRU_SUPPORT)/lib/rpmsg_lib.lib
 
-# TODO: think about what we want to say if stop fails
+TARGET_PRU0=$(BUILD_DIR)/stm-pru0.out
+TARGET_PRU1=$(BUILD_DIR)/stm-pru1.out
+
+TARGETS=$(TARGET_PRU0) $(TARGET_PRU1)
+
+OBJECTS_PRU0=$(BUILD_DIR)/stm-pru0.o
+OBJECTS_PRU1=$(BUILD_DIR)/stm-pru1.o
+
+all: build
+
+build: $(TARGETS)
+
 stop:
-ifneq ($(PRU_DIR),)
-	@echo "-    Stopping PRU $(PRUN)"
-	@echo stop > $(PRU_DIR)/state || echo Cannot stop $(PRUN)
-endif
+	@echo "-    Stopping PRUs"
+	@echo stop > $(PRU0_DIR)/state || echo Cannot stop PRU 0
+	@echo stop > $(PRU0_DIR)/state || echo Cannot stop PRU 1
 
 start:
-	@echo "-    Starting PRU $(PRUN)"
-	@echo start > $(PRU_DIR)/state
+	@echo "-    Starting PRUs"
+	@echo start > $(PRU0_DIR)/state
+	@echo start > $(PRU1_DIR)/state
 
-install: $(BUILD_DIR)/$(TARGET)$(EXE)
-ifneq ($(PRU_DIR),)
-	@echo '-	copying firmware file $(BUILD_DIR)/$(TARGET).out to /lib/firmware/$(CHIP)-pru$(PRUN)-fw'
-	@cp $(BUILD_DIR)/$(TARGET)$(EXE) /lib/firmware/$(CHIP)-pru$(PRUN)-fw
-else
-	@cp $(BUILD_DIR)/$(TARGET)$(EXE) ./$(TARGET)$(EXE)
-endif
+install: build
+	@echo '-	copying firmware files to /lib/firmware/'
+	@cp $(TARGET_PRU0) /lib/firmware/$(CHIP)-pru0-fw
+	@cp $(TARGET_PRU1) /lib/firmware/$(CHIP)-pru1-fw
 
-%.out: $(BUILD_DIR)/%.out
-	@echo 'CP	$^'
-	@cp $^ $@
-
-%.so: $(BUILD_DIR)/%.so
-	@echo 'CP	$^'
-	@cp $^ $@
-
-
-$(BUILD_DIR)/%.out: $(BUILD_DIR)/%.o
+$(TARGET_PRU0): $(OBJECTS_PRU0)
 	@mkdir -p $(BUILD_DIR)
 	@echo 'LD	$^'
 	@$(LD) $@ $^ $(LDFLAGS)
 
-$(BUILD_DIR)/%.so: $(BUILD_DIR)/%.o
+$(TARGET_PRU1): $(OBJECTS_PRU1)
 	@mkdir -p $(BUILD_DIR)
 	@echo 'LD	$^'
-	@$(LD) $@ -shared $^ $(LDFLAGS)
+	@$(LD) $@ $^ $(LDFLAGS)
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(BUILD_DIR)
 	@echo 'CC	$^'
 	@$(CC) $@ $^ $(CFLAGS)
-
-$(BUILD_DIR)/%.o: %.cpp
-	@mkdir -p $(BUILD_DIR)
-	@echo 'CXX	$^'
-	@$(CXX) $@ $^ $(CXXFLAGS)
 
 clean:
 	@echo 'CLEAN'

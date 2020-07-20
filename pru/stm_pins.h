@@ -3,17 +3,21 @@
 
 #include "pru_pins.h"
 
+#ifndef PRU
+    #error "PRU not defined"
+#endif
+
 // Pins only PRU0 can access:
-#ifdef(DPRUN==0)
+#if(PRU==0)
     #define PIN_ADC_CLK      P9_27
     #define PIN_ADC_MISO     P9_25
     #define PIN_ADC_MOSI     P9_30
-    #define PIN_ADC_CONV     P9_21
+    #define PIN_ADC_CONV     P9_31
     #define PIN_ADC_BUSY     P9_29
 #endif
 
 // Pins only PRU1 can access:
-#ifdef(DPRUN==1)
+#if(PRU==1)
     #define PIN_STEPPER_EN   P8_28
     #define PIN_STEPPER_STEP P8_29
     #define PIN_STEPPER_DIR  P8_27

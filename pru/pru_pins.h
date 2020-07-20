@@ -1,21 +1,28 @@
 #ifndef PRU_PINS_H
 #define PRU_PINS_H
 
+// Macros for bit manipulation
+#define SET_BIT(REG, PIN) (REG |= PIN)
+#define CLR_BIT(REG, PIN) (REG &= ~PIN)
+
+#ifndef PRU
+    #error "PRU not defined"
+#endif
+
 // Mapping from pin number to register (r30, r31) bit index
 // https://github.com/beagleboard/beaglebone-black/wiki/System-Reference-Manual#6123-pru-icss-pin-access
 
-
 // Pins only PRU0 can access:
-#ifdef(DPRUN==0)
-    #define P9_25 (1<<5)
-    #define P9_27 (1<<7)
+#if(PRU==0)
+    #define P9_25 (1<<7)
+    #define P9_27 (1<<5)
     #define P9_29 (1<<1)
     #define P9_30 (1<<2)
     #define P9_31 (1<<0)
 #endif
 
 // Pins only PRU1 can access:
-#ifdef(DPRUN==1)
+#if(PRU==1)
     #define P8_27 (1<<8)
     #define P8_28 (1<<10)
     #define P8_29 (1<<9)

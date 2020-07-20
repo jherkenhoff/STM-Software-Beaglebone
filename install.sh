@@ -2,12 +2,16 @@
 
 PATCH_DIR=./patches
 
+# Update system
 apt update
 apt upgrade
 
+# Install dependencies
 apt install vsftpd
-patch /etc/vsftpd.conf < ${PATCH_DIR}/vsftpd.patch
+apt install linux-headers-$(uname -r) # Kernel headers are required for driver compilation
 
+# Configure and start FTP service
+patch /etc/vsftpd.conf < ${PATCH_DIR}/vsftpd.patch
 systemctl enable vsftpd
 systemctl start vsftpd
 

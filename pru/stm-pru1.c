@@ -1,3 +1,5 @@
+#define PRU 1
+
 #include <stdint.h>
 #include <stdio.h>
 #include <pru_cfg.h>
@@ -29,10 +31,10 @@ void receive_adc_value() {
 	  size_t i;
 		for (i = 0; i < 18; i++) {
 			  // Sample bit on falling clock edge
-				CLR_BIT(__R30, PIN_ADC_CLK);
+				CLR_BIT(__R30, PIN_DAC_CLK);
 				__delay_cycles(10);
 				// TODO: Sample
-				SET_BIT(__R30, PIN_ADC_CLK);
+				SET_BIT(__R30, PIN_DAC_CLK);
 				__delay_cycles(10);
 		}
 }
@@ -62,10 +64,9 @@ void main(void) {
 
 		/* TODO: Create stop condition, else it will toggle indefinitely */
 		while (1) {
+				receive_adc_value();
 
 				if (__R31 & HOST_INT) {
-						SET_BIT(__R30, PIN_ADC_CLK);
-						__delay_cycles(10);
 						/* Clear the event status */
 						CT_INTC.SICR_bit.STS_CLR_IDX = FROM_ARM_HOST;
 						/* Receive all available messages, multiple messages can be sent per kick */
@@ -73,8 +74,6 @@ void main(void) {
 								/* Echo the message back to the same address from which we just received */
 								pru_rpmsg_send(&transport, dst, src, payload, len);
 						}
-						CLR_BIT(__R30, PIN_ADC_CLK);
-						__delay_cycles(10);
 				}
 		}
 }

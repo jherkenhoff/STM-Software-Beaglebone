@@ -4,6 +4,8 @@
 
 # Development enviroment
 
+I decided against a cross-compilation setup.
+
 Install and start FTP on beaglebone:
 ```
 
