@@ -1,79 +1,104 @@
+/*
+Firmware for PRU 1
+
+DAC
+*/
+
 #define PRU 1
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <pru_cfg.h>
 #include <pru_intc.h>
-#include <rsc_types.h>
-#include <pru_rpmsg.h>
 
-#include "resource_table_0.h"
-#include "stm_config.h"
+#include "resource_table_1.h"
+#include "pru_defs.h"
+#include "arm_pru1_share.h"
 
-volatile register uint32_t __R30;
-volatile register uint32_t __R31;
+/* Structure describing the shared context structure shared with the ARM host.
+ * Compiler attributes place this at 0x0000 */
+struct arm_pru1_share arm_share __attribute__((location(0))) = {0};
 
-/* Host-0 Interrupt sets bit 30 in register R31 */
-#define HOST_INT			((uint32_t) 1 << 30)
+void dac_write(uint8_t addr, uint32_t value, uint32_t cs_pin) {
+	uint32_t word = (addr<<20) | value;
 
-// PRU system event numbers
-#define TO_ARM_HOST   16
-#define FROM_ARM_HOST 17
-
-#define CHAN_NAME			"rpmsg-pru"
-#define CHAN_DESC			"Channel 30"
-#define CHAN_PORT			30
-
-#define VIRTIO_CONFIG_S_DRIVER_OK	4
-uint8_t payload[RPMSG_BUF_SIZE];
-
-void write_dac_value(uint32_t value, uint32_t cs_pin) {
 	size_t i;
-	for (i = 0; i < DAC_DATA_WIDTH; i++) {
-		// Sample bit on falling clock edge
-		CLR_BIT(__R30, PIN_DAC_CLK);
-		__delay_cycles(10);
-		// TODO: Sample
-		SET_BIT(__R30, PIN_DAC_CLK);
-		__delay_cycles(10);
+	CLR_PIN(cs_pin);
+	for (i = 0; i < 24; i++) {
+		SET_PIN(PIN_DAC_CLK);
+		if (word & (1<<24-1))
+			SET_PIN(PIN_DAC_MOSI);
+		else
+			CLR_PIN(PIN_DAC_MOSI);
+
+		__delay_cycles(4);
+		CLR_PIN(PIN_DAC_CLK);
+		__delay_cycles(4);
+
+		word = word<<1;
 	}
+	SET_PIN(cs_pin);
 }
 
+void dac_set_value(int32_t value, uint32_t cs_pin) {
+	// Convert the 32 bit signed value to a signed word with 18 bits
+	// For that we need to shift the 31st bit (sign bit) down to the 17st position ...
+	uint32_t word_value = (value>>14) & (1<<17);
+	// ... and use the lowest 17 bits of the original value:
+	word_value = word_value | (value & ((1<<17)-1));
+	// Shift the final word to the left by two bits, as the AD5781 wants the
+	// DAC data to be placed on bits 19 to 2
+	word_value = word_value<<2;
+	dac_write(0x01, word_value, cs_pin);
+}
+
+void init_dacs() {
+	// Init DAC Pins
+	CLR_PIN(PIN_DAC_CLK);
+	SET_PIN(PIN_DAC_LDAC);
+	SET_PIN(PIN_DAC_CS_X);
+	SET_PIN(PIN_DAC_CS_Y);
+	SET_PIN(PIN_DAC_CS_Z);
+	SET_PIN(PIN_DAC_CS_BIAS);
+
+
+	// Initialize all DAC values to 0:
+	dac_set_value(0, PIN_DAC_CS_X);
+	dac_set_value(0, PIN_DAC_CS_Y);
+	dac_set_value(0, PIN_DAC_CS_Z);
+	dac_set_value(0, PIN_DAC_CS_BIAS);
+
+	// Write config register (Addr 0x02)
+	//             LIN COMP   RBUF
+	uint32_t val = (12<<6) | (1<<1);
+	dac_write(0x02, val, PIN_DAC_CS_X);
+	dac_write(0x02, val, PIN_DAC_CS_Y);
+	dac_write(0x02, val, PIN_DAC_CS_Z);
+	dac_write(0x02, val, PIN_DAC_CS_BIAS);
+}
+
+void update_dacs() {
+	__delay_cycles(4);
+	CLR_PIN(PIN_DAC_LDAC);
+	__delay_cycles(4);
+	SET_PIN(PIN_DAC_LDAC);
+}
 
 void main(void) {
-
-		struct pru_rpmsg_transport transport;
-		uint16_t src, dst, len;
-		volatile uint8_t *status;
+		arm_share.magic = ARM_PRU1_SHARE_MAGIC;
 
 		/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
 		CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
 
-		/* Clear the status of the PRU-ICSS system event that the ARM will use to 'kick' us */
-		CT_INTC.SICR_bit.STS_CLR_IDX = FROM_ARM_HOST;
+		init_dacs();
 
-		/* Make sure the Linux drivers are ready for RPMsg communication */
-		status = &resourceTable.rpmsg_vdev.status;
-		while (!(*status & VIRTIO_CONFIG_S_DRIVER_OK));
-
-		/* Initialize the RPMsg transport structure */
-		pru_rpmsg_init(&transport, &resourceTable.rpmsg_vring0, &resourceTable.rpmsg_vring1, TO_ARM_HOST, FROM_ARM_HOST);
-
-		/* Create the RPMsg channel between the PRU and ARM user space using the transport structure. */
-		while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, CHAN_NAME, CHAN_DESC, CHAN_PORT) != PRU_RPMSG_SUCCESS);
-
-		/* TODO: Create stop condition, else it will toggle indefinitely */
 		while (1) {
-				write_dac_value(0, PIN_DAC_CS_X);
-
-				if (__R31 & HOST_INT) {
-						/* Clear the event status */
-						CT_INTC.SICR_bit.STS_CLR_IDX = FROM_ARM_HOST;
-						/* Receive all available messages, multiple messages can be sent per kick */
-						while (pru_rpmsg_receive(&transport, &src, &dst, payload, &len) == PRU_RPMSG_SUCCESS) {
-								/* Echo the message back to the same address from which we just received */
-								pru_rpmsg_send(&transport, dst, src, payload, len);
-						}
-				}
+			dac_set_value(arm_share.dac_x_manual_setpoint, PIN_DAC_CS_X);
+			dac_set_value(arm_share.dac_y_manual_setpoint, PIN_DAC_CS_Y);
+			dac_set_value(arm_share.dac_z_manual_setpoint, PIN_DAC_CS_Z);
+			dac_set_value(arm_share.dac_bias_setpoint, PIN_DAC_CS_BIAS);
+			update_dacs();
+			__delay_cycles(100);
 		}
 }

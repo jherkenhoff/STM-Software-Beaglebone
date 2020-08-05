@@ -6,9 +6,12 @@
 #include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
-
 #include <linux/miscdevice.h>
 #include <linux/kobject.h>
+
+#include <linux/pruss.h>
+// #include <linux/pruss_intc.h>
+#include <linux/remoteproc.h>
 
 #include <linux/of.h>
 #include <linux/of_platform.h>
@@ -18,17 +21,45 @@
 #include <linux/sysfs.h>
 #include <linux/fs.h>
 
+#include "../pru/arm_pru0_share.h"
+#include "../pru/arm_pru1_share.h"
+
 #define DRV_NAME	"stm"
 #define DRV_VERSION	"0.1"
+
+struct stm_private_data {
+	const char *fw_names[PRUSS_NUM_PRUS];
+};
+
+static struct stm_private_data stm_pdata = {
+	.fw_names[0] = "stm-pru0-fw",
+	.fw_names[1] = "stm-pru1-fw",
+};
+
+// Mapping between device tree node and driver
+static const struct of_device_id stm_dt_ids[] = {
+	{ .compatible = "stm,stm", .data = &stm_pdata, },
+	{ /* sentinel */ },
+};
+MODULE_DEVICE_TABLE(of, stm_dt_ids);
+
 
 struct stm_dev {
 	/* Misc device descriptor */
 	struct miscdevice miscdev;
 
+
+	struct pruss *pruss;
+	struct rproc *pru0, *pru1;
+	struct pruss_mem_region pru0sram, pru1sram;
+	const struct stm_private_data *fw_data;
+
 	/* Private data */
 	struct device *p_dev; /* Parent platform device */
 
 	/* Device capabilities */
+	struct arm_pru0_share *arm_pru0_share;
+	struct arm_pru1_share *arm_pru1_share;
 	uint32_t samplerate;
 };
 
@@ -77,7 +108,20 @@ static const struct file_operations stm_fops = {
 
 /**** Sysfs attributes ********************************************************/
 static ssize_t adc_value_show(struct device *dev, struct device_attribute *attr, char *buf) {
-	return snprintf(buf, PAGE_SIZE, "%d", 100);
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru0_share->adc_value);
+}
+
+static ssize_t dac_x_manual_setpoint_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	if (kstrtoint(buf, 10, &stmdev->arm_pru1_share->dac_x_manual_setpoint))
+		return -EINVAL;
+	return count;
+}
+
+static ssize_t dac_x_manual_setpoint_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_x_manual_setpoint);
 }
 
 static ssize_t adc_averages_show(struct device *dev, struct device_attribute *attr, char *buf) {
@@ -88,6 +132,7 @@ static ssize_t adc_averages_store(struct device *dev, struct device_attribute *a
 }
 
 static DEVICE_ATTR(adc_value, S_IRUGO, adc_value_show, NULL);
+static DEVICE_ATTR(dac_x_manual_setpoint, S_IWUSR | S_IRUGO, dac_x_manual_setpoint_show, dac_x_manual_setpoint_store);
 static DEVICE_ATTR(adc_averages, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
 static DEVICE_ATTR(scan_x_center, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
 static DEVICE_ATTR(scan_y_center, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
@@ -103,6 +148,7 @@ static DEVICE_ATTR(loop_adc_setpoint, S_IWUSR | S_IRUGO, adc_averages_show, adc_
 
 static struct attribute *stm_attributes[] = {
 	&dev_attr_adc_value.attr,
+	&dev_attr_dac_x_manual_setpoint.attr,
 	&dev_attr_adc_averages.attr,
 	&dev_attr_scan_x_center.attr,
 	&dev_attr_scan_y_center.attr,
@@ -122,14 +168,6 @@ static struct attribute_group stm_attr_group = {
 	.attrs = stm_attributes
 };
 
-
-// Mapping between device tree node and driver
-static const struct of_device_id stm_dt_ids[] = {
-	{ .compatible = "stm,stm" },
-	{ /* sentinel */ },
-};
-MODULE_DEVICE_TABLE(of, stm_dt_ids);
-
 static int stm_probe(struct platform_device *pdev) {
 	struct stm_dev *stmdev;
 	struct device *dev;
@@ -137,32 +175,32 @@ static int stm_probe(struct platform_device *pdev) {
 	const struct of_device_id *match;
 	int ret;
 
-    pr_info("STM Driver probe");
+    pr_info("STM Driver probe\n");
 
     // Check if device-tree is supported, else return
     if (!node) {
-		pr_err("Device tree is not supported on this platform");
+		pr_err("Device tree is not supported on this platform\n");
         return -ENODEV;
 	}
 
     // Check if the device (pdev) is supported by this driver
     match = of_match_device(stm_dt_ids, &pdev->dev);
     if (!match) {
-		pr_err("Device is not supported by this driver");
+		pr_err("Device is not supported by this driver\n");
         return -ENODEV;
 	}
 
 	// Allocate memory for device structure
 	stmdev = devm_kzalloc(&pdev->dev, sizeof(*stmdev), GFP_KERNEL);
 	if (!stmdev) {
-		pr_err("Failed to alloc memory for stmdev");
+		pr_err("Failed to alloc memory for stmdev\n");
 		ret = -1;
 		goto fail;
 	}
-    pr_info("Memory alloc successfull");
+    pr_info("Memory alloc successfull\n");
 
 	// Initialize stm device members
-	//stmdev->fw_data = match->data;
+	stmdev->fw_data = match->data;
 	stmdev->miscdev.fops  = &stm_fops;
 	stmdev->miscdev.minor = MISC_DYNAMIC_MINOR;
 	stmdev->miscdev.mode  = S_IRUGO;
@@ -172,31 +210,139 @@ static int stm_probe(struct platform_device *pdev) {
 	stmdev->p_dev = &pdev->dev;
 	dev_set_drvdata(stmdev->p_dev, stmdev);
 
+	/* Get a handle to the PRUSS structures */
+	dev = &pdev->dev;
+
+	stmdev->pru0 = pru_rproc_get(node, PRUSS_PRU0);
+	if (IS_ERR(stmdev->pru0)) {
+		ret = PTR_ERR(stmdev->pru0);
+		if (ret != -EPROBE_DEFER)
+			dev_err(dev, "Unable to get PRU0.\n");
+		// goto fail_free;
+	}
+
+	stmdev->pruss = pruss_get(stmdev->pru0);
+	if (IS_ERR(stmdev->pruss)) {
+		ret = PTR_ERR(stmdev->pruss);
+		if (ret != -EPROBE_DEFER)
+			dev_err(dev, "Unable to get pruss handle.\n");
+		goto fail_pru0_put;
+	}
+
+	stmdev->pru1 = pru_rproc_get(node, PRUSS_PRU1);
+	if (IS_ERR(stmdev->pru1)) {
+		ret = PTR_ERR(stmdev->pru1);
+		if (ret != -EPROBE_DEFER)
+			dev_err(dev, "Unable to get PRU0.\n");
+		goto fail_pruss_put;
+	}
+
+	ret = pruss_request_mem_region(stmdev->pruss, PRUSS_MEM_DRAM0,
+		&stmdev->pru0sram);
+	if (ret) {
+		dev_err(dev, "Unable to get PRUSS RAM 0.\n");
+		goto fail_putmem0;
+	}
+
+	ret = pruss_request_mem_region(stmdev->pruss, PRUSS_MEM_DRAM1,
+		&stmdev->pru1sram);
+	if (ret) {
+		dev_err(dev, "Unable to get PRUSS RAM 1.\n");
+		goto fail_putmem1;
+	}
+
+
+	/***************************************************************************
+	 * Load PRU firmware and start
+	 **************************************************************************/
+    pr_info("Setting up PRUs\n");
+	ret = rproc_set_firmware(stmdev->pru0, stmdev->fw_data->fw_names[0]);
+	if (ret) {
+		dev_err(dev, "Failed to set PRU0 firmware %s: %d\n",
+			stmdev->fw_data->fw_names[0], ret);
+		goto fail_putmem1;
+	}
+    pr_info("PRU0 firmware loaded\n");
+
+	ret = rproc_set_firmware(stmdev->pru1, stmdev->fw_data->fw_names[1]);
+	if (ret) {
+		dev_err(dev, "Failed to set PRU1 firmware %s: %d\n",
+			stmdev->fw_data->fw_names[1], ret);
+		goto fail_putmem1;
+	}
+    pr_info("PRU1 firmware loaded\n");
+
+	ret = rproc_boot(stmdev->pru0);
+	if (ret) {
+		dev_err(dev, "Failed to boot PRU0: %d\n", ret);
+		goto fail_putmem1;
+	}
+    pr_info("PRU0 boot successfull\n");
+
+	ret = rproc_boot(stmdev->pru1);
+	if (ret) {
+		dev_err(dev, "Failed to boot PRU1: %d\n", ret);
+		goto fail_shutdown_pru0;
+	}
+    pr_info("PRU1 boot successfull\n");
+
 	// Register stm device
 	ret = misc_register(&stmdev->miscdev);
 	if (ret) {
-		pr_err("Failed to register stm device");
-		goto fail;
+		pr_err("Failed to register stm device\n");
+		goto fail_shutdown_pru1;
 	}
-    pr_info("Driver registration successfull");
+    pr_info("Driver registration successfull\n");
 
-	// Link private driver to device
+	// Link private data to device
 	dev = stmdev->miscdev.this_device;
 	dev_set_drvdata(dev, stmdev);
-    pr_info("Link private data successfull");
+    pr_info("Link private data successfull\n");
 
 	ret = sysfs_create_group(&dev->kobj, &stm_attr_group);
 	if (ret) {
-		dev_err(dev, "Sysfs creation failed.");
+		dev_err(dev, "Sysfs creation failed.\n");
 		goto faildereg;
 	}
-    pr_info("Sysfs creation successfull");
+    pr_info("Sysfs creation successfull\n");
 
-	pr_info("Successfully loaded STM driver");
+	stmdev->arm_pru0_share = stmdev->pru0sram.va + 0;
+	stmdev->arm_pru1_share = stmdev->pru1sram.va + 0;
+
+	if (stmdev->arm_pru0_share->magic == ARM_PRU0_SHARE_MAGIC)
+		dev_info(dev, "Valid ARM-PRU0 share structure found\n");
+	else {
+		dev_err(dev, "PRU0 Firmware error! (Magic word not found)\n");
+		goto faildereg;
+	}
+
+	if (stmdev->arm_pru1_share->magic == ARM_PRU1_SHARE_MAGIC)
+		dev_info(dev, "Valid ARM-PRU1 share structure found\n");
+	else {
+		dev_err(dev, "PRU1 Firmware error! (Magic word not found)\n");
+		goto faildereg;
+	}
+
+	pr_info("Successfully loaded STM driver\n");
     return 0;
 
 faildereg:
 	misc_deregister(&stmdev->miscdev);
+fail_shutdown_pru1:
+	rproc_shutdown(stmdev->pru1);
+fail_shutdown_pru0:
+	rproc_shutdown(stmdev->pru0);
+fail_putmem1:
+	if (stmdev->pru1sram.va)
+		pruss_release_mem_region(stmdev->pruss, &stmdev->pru1sram);
+fail_putmem0:
+	if (stmdev->pru0sram.va)
+		pruss_release_mem_region(stmdev->pruss, &stmdev->pru0sram);
+	pru_rproc_put(stmdev->pru1);
+fail_pruss_put:
+	pruss_put(stmdev->pruss);
+fail_pru0_put:
+	pru_rproc_put(stmdev->pru0);
 fail:
 	return ret;
 }
@@ -208,8 +354,20 @@ static int stm_remove(struct platform_device *pdev) {
 	/* Remove the sysfs attributes */
 	sysfs_remove_group(&dev->kobj, &stm_attr_group);
 
-	/* Deregister the misc device */
+	/* Unregister the misc device */
 	misc_deregister(&stmdev->miscdev);
+
+	/* Shutdown the PRUs */
+	dev_info(dev, "Shutting down PRUs\n");
+	rproc_shutdown(stmdev->pru1);
+	rproc_shutdown(stmdev->pru0);
+
+	/* Release handles to PRUSS memory regions */
+	pruss_release_mem_region(stmdev->pruss, &stmdev->pru0sram);
+	pruss_release_mem_region(stmdev->pruss, &stmdev->pru1sram);
+	pru_rproc_put(stmdev->pru1);
+	pruss_put(stmdev->pruss);
+	pru_rproc_put(stmdev->pru0);
 
 	printk("STM driver unloaded\n");
 	return 0;

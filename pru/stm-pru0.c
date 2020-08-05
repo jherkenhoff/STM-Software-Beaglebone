@@ -1,78 +1,71 @@
+/*
+Firmware for PRU 0
+
+ADC
+*/
+
 #define PRU 0
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <pru_cfg.h>
 #include <pru_intc.h>
-#include <rsc_types.h>
-#include <pru_rpmsg.h>
 
 #include "resource_table_0.h"
-#include "stm_config.h"
+#include "pru_defs.h"
+#include "arm_pru0_share.h"
 
-volatile register uint32_t __R30;
-volatile register uint32_t __R31;
+/* Structure describing the shared context structure shared with the ARM host.
+ * Compiler attributes place this at 0x0000 */
+struct arm_pru0_share arm_share __attribute__((location(0))) = {0};
 
-/* Host-0 Interrupt sets bit 30 in register R31 */
-#define HOST_INT			((uint32_t) 1 << 30)
+void adc_init() {
+	SET_PIN(PIN_ADC_CLK);
+	CLR_PIN(PIN_ADC_CONV);
+	CLR_PIN(PIN_ADC_MOSI);
+}
 
-// PRU system event numbers
-#define TO_ARM_HOST   16
-#define FROM_ARM_HOST 17
+uint32_t read_adc_value() {
+	uint32_t value = 0;
+	size_t i;
+	for (i = 0; i < 18; i++) {
+		value = value<<1;
+		// Sample bit on falling clock edge
+		CLR_PIN(PIN_ADC_CLK);
+		if IS_PIN_SET(PIN_ADC_MISO)
+			value = value | 1;
+		__delay_cycles(100);
+		// TODO: Sample
+		SET_PIN(PIN_ADC_CLK);
+		__delay_cycles(100);
+	}
 
-#define CHAN_NAME			"rpmsg-pru"
-#define CHAN_DESC			"Channel 30"
-#define CHAN_PORT			30
+	return value;
+}
 
-#define VIRTIO_CONFIG_S_DRIVER_OK	4
-uint8_t payload[RPMSG_BUF_SIZE];
+void adc_trigger_conv() {
+	SET_PIN(PIN_ADC_CONV);
+	__delay_cycles(50);
+	CLR_PIN(PIN_ADC_CONV);
+}
 
-void receive_adc_value() {
-	  size_t i;
-		for (i = 0; i < ADC_DATA_WIDTH; i++) {
-			  // Sample bit on falling clock edge
-				CLR_BIT(__R30, PIN_ADC_CLK);
-				__delay_cycles(10);
-				// TODO: Sample
-				SET_BIT(__R30, PIN_ADC_CLK);
-				__delay_cycles(10);
-		}
+bool adc_busy() {
+	return IS_PIN_SET(PIN_ADC_BUSY);
 }
 
 void main(void) {
-
-		struct pru_rpmsg_transport transport;
-		uint16_t src, dst, len;
-		volatile uint8_t *status;
+		arm_share.magic = ARM_PRU0_SHARE_MAGIC;
 
 		/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
 		CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
 
-		/* Clear the status of the PRU-ICSS system event that the ARM will use to 'kick' us */
-		CT_INTC.SICR_bit.STS_CLR_IDX = FROM_ARM_HOST;
+		adc_init();
 
-		/* Make sure the Linux drivers are ready for RPMsg communication */
-		status = &resourceTable.rpmsg_vdev.status;
-		while (!(*status & VIRTIO_CONFIG_S_DRIVER_OK));
-
-		/* Initialize the RPMsg transport structure */
-		pru_rpmsg_init(&transport, &resourceTable.rpmsg_vring0, &resourceTable.rpmsg_vring1, TO_ARM_HOST, FROM_ARM_HOST);
-
-		/* Create the RPMsg channel between the PRU and ARM user space using the transport structure. */
-		while (pru_rpmsg_channel(RPMSG_NS_CREATE, &transport, CHAN_NAME, CHAN_DESC, CHAN_PORT) != PRU_RPMSG_SUCCESS);
-
-		/* TODO: Create stop condition, else it will toggle indefinitely */
 		while (1) {
-				receive_adc_value();
+				adc_trigger_conv();
 
-				if (__R31 & HOST_INT) {
-						/* Clear the event status */
-						CT_INTC.SICR_bit.STS_CLR_IDX = FROM_ARM_HOST;
-						/* Receive all available messages, multiple messages can be sent per kick */
-						while (pru_rpmsg_receive(&transport, &src, &dst, payload, &len) == PRU_RPMSG_SUCCESS) {
-								/* Echo the message back to the same address from which we just received */
-								pru_rpmsg_send(&transport, dst, src, payload, len);
-						}
-				}
+				while(adc_busy());
+				arm_share.adc_value = read_adc_value();
 		}
 }

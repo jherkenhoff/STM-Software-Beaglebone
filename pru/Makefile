@@ -38,20 +38,35 @@ all: build
 
 build: $(TARGETS)
 
-stop:
-	@echo "-    Stopping PRUs"
-	@echo stop > $(PRU0_DIR)/state || echo Cannot stop PRU 0
-	@echo stop > $(PRU0_DIR)/state || echo Cannot stop PRU 1
+stop: stop_pru0 stop_pru1
 
-start:
-	@echo "-    Starting PRUs"
+stop_pru0:
+	@echo "-    Stopping PRU0"
+	@echo 'stop' > $(PRU0_DIR)/state || echo "Cannot stop PRU 0. (Current state is \"`cat $(PRU0_DIR)/state`\")"
+
+stop_pru1:
+	@echo "-    Stopping PRU1"
+	@echo 'stop' > $(PRU1_DIR)/state || echo "Cannot stop PRU 1. (Current state is \"`cat $(PRU1_DIR)/state`\")"
+
+start: stop install
+	@echo "-    Setting firmware for PRU0"
+	@echo stm-pru0-fw > $(PRU0_DIR)/firmware
+	@echo "-    Setting firmware for PRU1"
+	@echo stm-pru1-fw > $(PRU1_DIR)/firmware
+	@echo "-    Starting PRU0"
 	@echo start > $(PRU0_DIR)/state
+	@echo "-    Starting PRU1"
 	@echo start > $(PRU1_DIR)/state
 
-install: build
-	@echo '-	copying firmware files to /lib/firmware/'
-	@cp $(TARGET_PRU0) /lib/firmware/$(CHIP)-pru0-fw
-	@cp $(TARGET_PRU1) /lib/firmware/$(CHIP)-pru1-fw
+install: /lib/firmware/stm-pru0-fw /lib/firmware/stm-pru1-fw
+
+/lib/firmware/stm-pru0-fw: $(TARGET_PRU0)
+	@echo '-	copying PRU0 firmware to /lib/firmware/stm-pru0-fw'
+	@cp $(TARGET_PRU0) /lib/firmware/stm-pru0-fw
+
+/lib/firmware/stm-pru1-fw: $(TARGET_PRU1)
+	@echo '-	copying PRU1 firmware to /lib/firmware/stm-pru1-fw'
+	@cp $(TARGET_PRU1) /lib/firmware/stm-pru1-fw
 
 $(TARGET_PRU0): $(OBJECTS_PRU0)
 	@mkdir -p $(BUILD_DIR)
