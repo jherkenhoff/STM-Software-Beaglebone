@@ -1,0 +1,22 @@
+
+
+
+#define MAJOR_NUM 100
+
+#define IOCTL_STM_GET_VERSION _IOR(MAJOR_NUM, 0, u32)
+
+#define IOCTL_STM_SET_SCAN_PATTERN _IOR(MAJOR_NUM, 1, u32)
+
+
+
+/*
+    X
+    Y
+
+    Z_CTRL_ENABLE
+    Z_CTRL_P
+    Z_CTRL_I
+    Z_CTRL_D
+    Z_CTRL_ADC_SETPOINT
+
+*/

@@ -7,8 +7,9 @@ apt update
 apt upgrade
 
 # Install dependencies
-apt install vsftpd
+apt install vsftpd # FTP server. Udeful for development and debugging
 apt install linux-headers-$(uname -r) # Kernel headers are required for driver compilation
+apt install cython3
 
 # Configure and start FTP service
 patch /etc/vsftpd.conf < ${PATCH_DIR}/vsftpd.patch

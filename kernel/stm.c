@@ -4,6 +4,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/uaccess.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
 #include <linux/miscdevice.h>
@@ -21,11 +22,12 @@
 #include <linux/sysfs.h>
 #include <linux/fs.h>
 
+#include "../common/circularbuffer.h"
+#include "../pru/stm-pru1.h"
 #include "../pru/arm_pru0_share.h"
-#include "../pru/arm_pru1_share.h"
 
 #define DRV_NAME	"stm"
-#define DRV_VERSION	"0.1"
+#define DRV_VERSION "1.0"
 
 struct stm_private_data {
 	const char *fw_names[PRUSS_NUM_PRUS];
@@ -43,11 +45,9 @@ static const struct of_device_id stm_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, stm_dt_ids);
 
-
 struct stm_dev {
 	/* Misc device descriptor */
 	struct miscdevice miscdev;
-
 
 	struct pruss *pruss;
 	struct rproc *pru0, *pru1;
@@ -63,26 +63,92 @@ struct stm_dev {
 	uint32_t samplerate;
 };
 
+/*******************************************************************************
+ * PRU access functions
+ ******************************************************************************/
+void set_scan_enabled(struct stm_dev *stmdev, bool enable) {
+	stmdev->arm_pru1_share->scan_en = enable;
+}
 
-/**** Device file operations **************************************************/
+bool is_scan_enabled(struct stm_dev *stmdev) {
+	return stmdev->arm_pru1_share->scan_en;
+}
+
+/*******************************************************************************
+ * File operations
+ ******************************************************************************/
+
+// Macro used to get a pointer to the parent stm_dev struct based on a pointer to
+// the miscdev struct stored inside stm_dev
+#define to_stmdev(dev) container_of((dev), struct stm_dev, miscdev)
+
 static int stm_f_open(struct inode *inode, struct file *filp) {
+	struct stm_dev *stmdev = to_stmdev(filp->private_data);
+	struct device *dev = stmdev->miscdev.this_device;
+
 	return 0;
 }
 
-ssize_t stm_f_read (struct file *filp, char __user *buf, size_t sz, loff_t *offset) {
-	return -EFAULT;
+ssize_t stm_f_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos) {
+	struct stm_dev *stmdev = to_stmdev(filp->private_data);
+	struct device *dev = stmdev->miscdev.this_device;
+	size_t write_cnt;
+	void *scan_buf;
+	struct scan_point m;
+
+	if (!CircularBufferIsAllocated(&stmdev->arm_pru1_share->scan_buffer)) {
+		dev_warn(dev, "Tried to write to sample buffer, but no memory has been assigned to it\n");
+		return -ENOBUFS;
+	}
+
+	if (count % sizeof(struct scan_point) != 0) {
+		dev_warn(dev, "Can only write multiples of sizeof(scan_point) bytes\n");
+		return -EINVAL;
+	}
+
+	write_cnt = CircularBufferPrepareBulkPush(&stmdev->arm_pru1_share->scan_buffer, &scan_buf);
+
+	if (write_cnt == 0)
+		return 0;
+
+	count = min(write_cnt*sizeof(struct scan_point), count);
+	if (copy_from_user(scan_buf, buf, count)) {
+		dev_warn(dev, "Could not copy_from_user\n");
+		return -EFAULT;
+	}
+	CircularBufferCommitBulkPush(&stmdev->arm_pru1_share->scan_buffer, count/sizeof(struct scan_point));
+
+	return count;
 }
 
-int stm_f_mmap(struct file *filp, struct vm_area_struct *vma) {
-	return 0;
-}
+ssize_t stm_f_read(struct file *filp, char *buf, size_t count, loff_t *f_pos) {
+	struct stm_dev *stmdev = to_stmdev(filp->private_data);
+	struct device *dev = stmdev->miscdev.this_device;
+	size_t read_cnt;
+	void *scan_buf;
 
-static long stm_f_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
-	return -ENOTTY;
+	if (!CircularBufferIsAllocated(&stmdev->arm_pru1_share->scan_buffer)) {
+		dev_warn(dev, "Tried to read from sample buffer, but no memory has been assigned to it\n");
+		return -ENOBUFS;
+	}
+
+
+	read_cnt = CircularBufferPrepareBulkPop(&stmdev->arm_pru1_share->scan_buffer, &scan_buf);
+
+	count = min(read_cnt*sizeof(struct scan_point), count);
+	if (copy_to_user(buf, scan_buf, count)) {
+		dev_warn(dev, "Could not copy_to_user\n");
+		return -EFAULT;
+	}
+
+	CircularBufferCommitBulkPop(&stmdev->arm_pru1_share->scan_buffer, count/sizeof(struct scan_point));
+
+	return count;
 }
 
 static loff_t stm_f_llseek(struct file *filp, loff_t offset, int whence) {
-	return -EINVAL;
+	// We do not support seeking...
+	return -ESPIPE;
 }
 
 unsigned int stm_f_poll(struct file *filp, struct poll_table_struct *tbl) {
@@ -97,10 +163,9 @@ static int stm_f_release(struct inode *inode, struct file *filp) {
 static const struct file_operations stm_fops = {
 	.owner = THIS_MODULE,
 	.open = stm_f_open,
-	.unlocked_ioctl = stm_f_ioctl,
+	.write = stm_f_write,
 	.read = stm_f_read,
 	.llseek = stm_f_llseek,
-	.mmap = stm_f_mmap,
 	.poll = stm_f_poll,
 	.release = stm_f_release,
 };
@@ -124,43 +189,67 @@ static ssize_t dac_x_manual_setpoint_show(struct device *dev, struct device_attr
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_x_manual_setpoint);
 }
 
-static ssize_t adc_averages_show(struct device *dev, struct device_attribute *attr, char *buf) {
-	return snprintf(buf, PAGE_SIZE, "%d", 1);
-}
-static ssize_t adc_averages_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+static ssize_t scan_buffer_size_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	size_t new_size;
+	void *new_buf;
+
+	// TODO: Check if scan is currently running (We cant resize the sample buffer when running)
+	if (is_scan_enabled(stmdev)) {
+		dev_warn(dev, "Tried to set scan buffer size while scan is running");
+		return -EBUSY;
+	}
+
+	if (kstrtoint(buf, 10, &new_size))
+		return -EINVAL;
+	dev_dbg(dev, "Resizing scan buffer to %d sample points\n", new_size);
+
+	// Fail if new buffer size is not a power of two
+	if ((new_size & (new_size - 1)) != 0) {
+		dev_warn(dev, "Tried to set buffer size to %d, but only powers of two are supporte", new_size);
+		return -EINVAL;
+	}
+
+	CircularBufferReset(&stmdev->arm_pru1_share->scan_buffer);
+
+	// Free the previously allocated buffer memory. If none was previously
+	// allocated (i.e.  scan_buffer.buf == NULL), kfree does nothing
+	kfree(stmdev->arm_pru1_share->scan_buffer.buf);
+	stmdev->arm_pru1_share->scan_buffer.buf = NULL;
+
+	if (new_size > 0) {
+		new_buf = kmalloc(new_size*sizeof(struct scan_point), GFP_KERNEL);
+		if (!new_buf) {
+			dev_err(dev, "Scan buffer allocation failed\n");
+			return -EFAULT;
+		}
+		CircularBufferInit(&stmdev->arm_pru1_share->scan_buffer, new_buf, new_size, sizeof(struct scan_point));
+	}
+
 	return count;
 }
 
+static ssize_t scan_buffer_size_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->scan_buffer.max_size+1);
+}
+
+static ssize_t scan_buffer_used_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", CircularBufferSize(&stmdev->arm_pru1_share->scan_buffer));
+}
+
+
 static DEVICE_ATTR(adc_value, S_IRUGO, adc_value_show, NULL);
 static DEVICE_ATTR(dac_x_manual_setpoint, S_IWUSR | S_IRUGO, dac_x_manual_setpoint_show, dac_x_manual_setpoint_store);
-static DEVICE_ATTR(adc_averages, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(scan_x_center, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(scan_y_center, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(scan_x_step, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(scan_y_step, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(scan_x_num, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(scan_y_num, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(loop_enable, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(loop_p_gain, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(loop_i_gain, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(loop_d_gain, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
-static DEVICE_ATTR(loop_adc_setpoint, S_IWUSR | S_IRUGO, adc_averages_show, adc_averages_store);
+static DEVICE_ATTR(scan_buffer_size, S_IWUSR | S_IRUGO, scan_buffer_size_show, scan_buffer_size_store);
+static DEVICE_ATTR(scan_buffer_used, S_IRUGO, scan_buffer_used_show, NULL);
 
 static struct attribute *stm_attributes[] = {
 	&dev_attr_adc_value.attr,
 	&dev_attr_dac_x_manual_setpoint.attr,
-	&dev_attr_adc_averages.attr,
-	&dev_attr_scan_x_center.attr,
-	&dev_attr_scan_y_center.attr,
-	&dev_attr_scan_x_step.attr,
-	&dev_attr_scan_y_step.attr,
-	&dev_attr_scan_x_num.attr,
-	&dev_attr_scan_y_num.attr,
-	&dev_attr_loop_enable.attr,
-	&dev_attr_loop_p_gain.attr,
-	&dev_attr_loop_i_gain.attr,
-	&dev_attr_loop_d_gain.attr,
-	&dev_attr_loop_adc_setpoint.attr,
+	&dev_attr_scan_buffer_size.attr,
+	&dev_attr_scan_buffer_used.attr,
 	NULL
 };
 
@@ -323,6 +412,9 @@ static int stm_probe(struct platform_device *pdev) {
 		goto faildereg;
 	}
 
+	CircularBufferInit(&stmdev->arm_pru1_share->scan_buffer, NULL, 0, sizeof(struct scan_point));
+	pr_info("Initialized empty circular scan buffer");
+
 	pr_info("Successfully loaded STM driver\n");
     return 0;
 
@@ -357,6 +449,9 @@ static int stm_remove(struct platform_device *pdev) {
 	/* Unregister the misc device */
 	misc_deregister(&stmdev->miscdev);
 
+	// Free the scan buffer
+	kfree(stmdev->arm_pru1_share->scan_buffer.buf);
+
 	/* Shutdown the PRUs */
 	dev_info(dev, "Shutting down PRUs\n");
 	rproc_shutdown(stmdev->pru1);
@@ -377,7 +472,7 @@ static struct platform_driver stm_platform_driver = {
 	.probe      = stm_probe,
 	.remove     = stm_remove,
 	.driver     = {
-		.name   = "stm",
+		.name   = DRV_NAME,
 		.of_match_table = stm_dt_ids
 	},
 };
@@ -385,3 +480,4 @@ static struct platform_driver stm_platform_driver = {
 module_platform_driver(stm_platform_driver);
 
 MODULE_LICENSE("GPL");
+MODULE_VERSION(DRV_VERSION);

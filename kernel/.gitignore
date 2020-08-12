@@ -7,4 +7,3 @@ Module.symvers
 *.mod
 *.mod.c
 *.cmd
-*.dts.preprocessed
