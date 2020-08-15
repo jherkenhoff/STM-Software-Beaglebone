@@ -16,7 +16,8 @@ struct arm_pru1_share {
 
    uint32_t scan_en;
 
-   CircularBufferContext scan_buffer;
+   CircularBufferContext pattern_buf_ctx;
+   void *pattern_buf;
 
    int32_t dac_x_manual_setpoint;
    int32_t dac_y_manual_setpoint;

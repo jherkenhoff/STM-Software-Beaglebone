@@ -9,6 +9,7 @@
 #include <linux/platform_device.h>
 #include <linux/miscdevice.h>
 #include <linux/kobject.h>
+#include <linux/dma-mapping.h>
 
 #include <linux/pruss.h>
 // #include <linux/pruss_intc.h>
@@ -60,7 +61,8 @@ struct stm_dev {
 	/* Device capabilities */
 	struct arm_pru0_share *arm_pru0_share;
 	struct arm_pru1_share *arm_pru1_share;
-	uint32_t samplerate;
+
+	void *pattern_buf;
 };
 
 /*******************************************************************************
@@ -93,11 +95,11 @@ ssize_t stm_f_write(struct file *filp, const char *buf, size_t count, loff_t *f_
 	struct stm_dev *stmdev = to_stmdev(filp->private_data);
 	struct device *dev = stmdev->miscdev.this_device;
 	size_t write_cnt;
-	void *scan_buf;
+	void *pattern_buf_pos;
 	struct scan_point m;
 
-	if (!CircularBufferIsAllocated(&stmdev->arm_pru1_share->scan_buffer)) {
-		dev_warn(dev, "Tried to write to sample buffer, but no memory has been assigned to it\n");
+	if (stmdev->pattern_buf == NULL) {
+		dev_warn(dev, "Tried to write to pattern buffer, but no memory has been assigned to it\n");
 		return -ENOBUFS;
 	}
 
@@ -106,42 +108,42 @@ ssize_t stm_f_write(struct file *filp, const char *buf, size_t count, loff_t *f_
 		return -EINVAL;
 	}
 
-	write_cnt = CircularBufferPrepareBulkPush(&stmdev->arm_pru1_share->scan_buffer, &scan_buf);
+	write_cnt = CircularBufferPrepareBulkPush(&stmdev->arm_pru1_share->pattern_buf_ctx, stmdev->pattern_buf, &pattern_buf_pos);
 
 	if (write_cnt == 0)
 		return 0;
 
 	count = min(write_cnt*sizeof(struct scan_point), count);
-	if (copy_from_user(scan_buf, buf, count)) {
+	if (copy_from_user(pattern_buf_pos, buf, count)) {
 		dev_warn(dev, "Could not copy_from_user\n");
 		return -EFAULT;
 	}
-	CircularBufferCommitBulkPush(&stmdev->arm_pru1_share->scan_buffer, count/sizeof(struct scan_point));
+	CircularBufferCommitBulkPush(&stmdev->arm_pru1_share->pattern_buf_ctx, count/sizeof(struct scan_point));
 
 	return count;
 }
 
 ssize_t stm_f_read(struct file *filp, char *buf, size_t count, loff_t *f_pos) {
 	struct stm_dev *stmdev = to_stmdev(filp->private_data);
-	struct device *dev = stmdev->miscdev.this_device;
-	size_t read_cnt;
-	void *scan_buf;
-
-	if (!CircularBufferIsAllocated(&stmdev->arm_pru1_share->scan_buffer)) {
-		dev_warn(dev, "Tried to read from sample buffer, but no memory has been assigned to it\n");
-		return -ENOBUFS;
-	}
-
-
-	read_cnt = CircularBufferPrepareBulkPop(&stmdev->arm_pru1_share->scan_buffer, &scan_buf);
-
-	count = min(read_cnt*sizeof(struct scan_point), count);
-	if (copy_to_user(buf, scan_buf, count)) {
-		dev_warn(dev, "Could not copy_to_user\n");
-		return -EFAULT;
-	}
-
-	CircularBufferCommitBulkPop(&stmdev->arm_pru1_share->scan_buffer, count/sizeof(struct scan_point));
+	// struct device *dev = stmdev->miscdev.this_device;
+	// size_t read_cnt;
+	// void *scan_buf;
+	//
+	// if (!CircularBufferIsAllocated(&stmdev->arm_pru1_share->scan_buffer)) {
+	// 	dev_warn(dev, "Tried to read from sample buffer, but no memory has been assigned to it\n");
+	// 	return -ENOBUFS;
+	// }
+	//
+	//
+	// read_cnt = CircularBufferPrepareBulkPop(&stmdev->arm_pru1_share->scan_buffer, &scan_buf);
+	//
+	// count = min(read_cnt*sizeof(struct scan_point), count);
+	// if (copy_to_user(buf, scan_buf, count)) {
+	// 	dev_warn(dev, "Could not copy_to_user\n");
+	// 	return -EFAULT;
+	// }
+	//
+	// CircularBufferCommitBulkPop(&stmdev->arm_pru1_share->scan_buffer, count/sizeof(struct scan_point));
 
 	return count;
 }
@@ -189,67 +191,77 @@ static ssize_t dac_x_manual_setpoint_show(struct device *dev, struct device_attr
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_x_manual_setpoint);
 }
 
-static ssize_t scan_buffer_size_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+static ssize_t pattern_buf_size_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
 	size_t new_size;
-	void *new_buf;
+	dma_addr_t dma_handle;
 
-	// TODO: Check if scan is currently running (We cant resize the sample buffer when running)
+	// Check if scan is currently running (We cant resize the pattern buffer when running)
 	if (is_scan_enabled(stmdev)) {
-		dev_warn(dev, "Tried to set scan buffer size while scan is running");
+		dev_warn(dev, "Tried to set pattern buffer size while scan is running");
 		return -EBUSY;
 	}
 
 	if (kstrtoint(buf, 10, &new_size))
 		return -EINVAL;
-	dev_dbg(dev, "Resizing scan buffer to %d sample points\n", new_size);
+	dev_dbg(dev, "Resizing pattern buffer to %d sample points\n", new_size);
 
 	// Fail if new buffer size is not a power of two
 	if ((new_size & (new_size - 1)) != 0) {
-		dev_warn(dev, "Tried to set buffer size to %d, but only powers of two are supporte", new_size);
+		dev_warn(dev, "Tried to set pattern buffer size to %d, but only powers of two are supporte", new_size);
 		return -EINVAL;
 	}
 
-	CircularBufferReset(&stmdev->arm_pru1_share->scan_buffer);
+	CircularBufferReset(&stmdev->arm_pru1_share->pattern_buf_ctx);
 
-	// Free the previously allocated buffer memory. If none was previously
-	// allocated (i.e.  scan_buffer.buf == NULL), kfree does nothing
-	kfree(stmdev->arm_pru1_share->scan_buffer.buf);
-	stmdev->arm_pru1_share->scan_buffer.buf = NULL;
+	// Free the previously allocated buffer memory
+	if (stmdev->pattern_buf != NULL) {
+		dma_free_coherent(dev,
+			(stmdev->arm_pru1_share->pattern_buf_ctx.max_size+1)*sizeof(struct scan_point),
+			stmdev->pattern_buf,
+			stmdev->arm_pru1_share->pattern_buf);
+		stmdev->pattern_buf = NULL;
+		stmdev->arm_pru1_share->pattern_buf = NULL;
+	}
 
 	if (new_size > 0) {
-		new_buf = kmalloc(new_size*sizeof(struct scan_point), GFP_KERNEL);
-		if (!new_buf) {
+		stmdev->pattern_buf = dma_alloc_coherent(dev,
+												 new_size*sizeof(struct scan_point),
+												 &dma_handle,
+												 GFP_KERNEL);
+		if (!stmdev->pattern_buf) {
 			dev_err(dev, "Scan buffer allocation failed\n");
 			return -EFAULT;
 		}
-		CircularBufferInit(&stmdev->arm_pru1_share->scan_buffer, new_buf, new_size, sizeof(struct scan_point));
+		stmdev->arm_pru1_share->pattern_buf = NULL;
+		dev_info(dev, "Allocated pattern buffer memory. Physical addr: %x", dma_handle);
+		CircularBufferInit(&stmdev->arm_pru1_share->pattern_buf_ctx, new_size, sizeof(struct scan_point));
 	}
 
 	return count;
 }
 
-static ssize_t scan_buffer_size_show(struct device *dev, struct device_attribute *attr, char *buf) {
+static ssize_t pattern_buf_size_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
-	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->scan_buffer.max_size+1);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->pattern_buf_ctx.max_size+1);
 }
 
-static ssize_t scan_buffer_used_show(struct device *dev, struct device_attribute *attr, char *buf) {
+static ssize_t pattern_buf_used_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
-	return snprintf(buf, PAGE_SIZE, "%d", CircularBufferSize(&stmdev->arm_pru1_share->scan_buffer));
+	return snprintf(buf, PAGE_SIZE, "%d", CircularBufferSize(&stmdev->arm_pru1_share->pattern_buf_ctx));
 }
 
 
 static DEVICE_ATTR(adc_value, S_IRUGO, adc_value_show, NULL);
 static DEVICE_ATTR(dac_x_manual_setpoint, S_IWUSR | S_IRUGO, dac_x_manual_setpoint_show, dac_x_manual_setpoint_store);
-static DEVICE_ATTR(scan_buffer_size, S_IWUSR | S_IRUGO, scan_buffer_size_show, scan_buffer_size_store);
-static DEVICE_ATTR(scan_buffer_used, S_IRUGO, scan_buffer_used_show, NULL);
+static DEVICE_ATTR(pattern_buf_size, S_IWUSR | S_IRUGO, pattern_buf_size_show, pattern_buf_size_store);
+static DEVICE_ATTR(pattern_buf_used, S_IRUGO, pattern_buf_used_show, NULL);
 
 static struct attribute *stm_attributes[] = {
 	&dev_attr_adc_value.attr,
 	&dev_attr_dac_x_manual_setpoint.attr,
-	&dev_attr_scan_buffer_size.attr,
-	&dev_attr_scan_buffer_used.attr,
+	&dev_attr_pattern_buf_size.attr,
+	&dev_attr_pattern_buf_used.attr,
 	NULL
 };
 
@@ -263,6 +275,9 @@ static int stm_probe(struct platform_device *pdev) {
 	struct device_node *node = pdev->dev.of_node;
 	const struct of_device_id *match;
 	int ret;
+
+	void *buf;
+	dma_addr_t dma_addr;
 
     pr_info("STM Driver probe\n");
 
@@ -402,17 +417,33 @@ static int stm_probe(struct platform_device *pdev) {
 		dev_info(dev, "Valid ARM-PRU0 share structure found\n");
 	else {
 		dev_err(dev, "PRU0 Firmware error! (Magic word not found)\n");
+		ret = -1;
 		goto faildereg;
 	}
 
-	if (stmdev->arm_pru1_share->magic == ARM_PRU1_SHARE_MAGIC)
+	if (stmdev->arm_pru1_share->magic == ARM_PRU1_SHARE_MAGIC) {
 		dev_info(dev, "Valid ARM-PRU1 share structure found\n");
-	else {
+	} else {
 		dev_err(dev, "PRU1 Firmware error! (Magic word not found)\n");
+		ret = -1;
 		goto faildereg;
 	}
 
-	CircularBufferInit(&stmdev->arm_pru1_share->scan_buffer, NULL, 0, sizeof(struct scan_point));
+    if (!dma_set_coherent_mask(dev, DMA_BIT_MASK(64))) {
+        dev_info(dev, "Using 64 bit DMA mask");
+    } else if (!dma_set_coherent_mask(dev, DMA_BIT_MASK(32))) {
+        dev_info(dev, "Using 32 bit DMA mask");
+    } else if (dma_set_coherent_mask(dev, DMA_BIT_MASK(24))) {
+		dev_err(dev, "Failed to set DMA mask\n");
+		ret = -1;
+        goto faildereg;
+    } else {
+        dev_info(dev, "Using 24 bit DMA mask");
+    }
+
+	CircularBufferInit(&stmdev->arm_pru1_share->pattern_buf_ctx, 0, sizeof(struct scan_point));
+	stmdev->pattern_buf = NULL;
+	stmdev->arm_pru1_share->pattern_buf = NULL;
 	pr_info("Initialized empty circular scan buffer");
 
 	pr_info("Successfully loaded STM driver\n");
@@ -448,9 +479,6 @@ static int stm_remove(struct platform_device *pdev) {
 
 	/* Unregister the misc device */
 	misc_deregister(&stmdev->miscdev);
-
-	// Free the scan buffer
-	kfree(stmdev->arm_pru1_share->scan_buffer.buf);
 
 	/* Shutdown the PRUs */
 	dev_info(dev, "Shutting down PRUs\n");
