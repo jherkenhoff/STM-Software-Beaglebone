@@ -14,11 +14,11 @@ DAC
 
 #include "resource_table_1.h"
 #include "pru_defs.h"
-#include "arm_pru1_share.h"
+#include "stm-pru1.h"
 
 /* Structure describing the shared context structure shared with the ARM host.
  * Compiler attributes place this at 0x0000 */
-struct arm_pru1_share arm_share __attribute__((location(0))) = {0};
+volatile struct arm_pru1_share arm_share __attribute__((location(0))) = {0};
 
 void dac_write(uint8_t addr, uint32_t value, uint32_t cs_pin) {
 	uint32_t word = (addr<<20) | value;
@@ -86,19 +86,31 @@ void update_dacs() {
 }
 
 void main(void) {
-		arm_share.magic = ARM_PRU1_SHARE_MAGIC;
+	struct scan_point point;
 
-		/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
-		CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
+	arm_share.magic = ARM_PRU1_SHARE_MAGIC;
 
-		init_dacs();
+	/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
+	CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
 
-		while (1) {
-			dac_set_value(arm_share.dac_x_manual_setpoint, PIN_DAC_CS_X);
-			dac_set_value(arm_share.dac_y_manual_setpoint, PIN_DAC_CS_Y);
-			dac_set_value(arm_share.dac_z_manual_setpoint, PIN_DAC_CS_Z);
-			dac_set_value(arm_share.dac_bias_setpoint, PIN_DAC_CS_BIAS);
-			update_dacs();
-			__delay_cycles(100);
+	init_dacs();
+
+	while (1) {
+
+		if (arm_share.scan_enable) {
+			if (!CircularBufferPopFront(&arm_share.pattern_buffer_ctx, arm_share.pattern_buffer, &point)) {
+				arm_share.dac_x = point.x;
+				arm_share.dac_y = point.y;
+				dac_set_value(point.x, PIN_DAC_CS_X);
+				dac_set_value(point.y, PIN_DAC_CS_Y);
+			}
+		} else {
+			dac_set_value(arm_share.dac_x, PIN_DAC_CS_X);
+			dac_set_value(arm_share.dac_y, PIN_DAC_CS_Y);
 		}
+		dac_set_value(arm_share.dac_bias, PIN_DAC_CS_BIAS);
+		dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
+		update_dacs();
+		__delay_cycles(1000000);
+	}
 }

@@ -24,8 +24,8 @@
 #include <linux/fs.h>
 
 #include "../common/circularbuffer.h"
+#include "../pru/stm-pru0.h"
 #include "../pru/stm-pru1.h"
-#include "../pru/arm_pru0_share.h"
 
 #define DRV_NAME	"stm"
 #define DRV_VERSION "1.0"
@@ -59,22 +59,12 @@ struct stm_dev {
 	struct device *p_dev; /* Parent platform device */
 
 	/* Device capabilities */
-	struct arm_pru0_share *arm_pru0_share;
-	struct arm_pru1_share *arm_pru1_share;
+	volatile struct arm_pru0_share *arm_pru0_share;
+	volatile struct arm_pru1_share *arm_pru1_share;
 
-	void *pattern_buf;
+	void *pattern_buffer;
+	void *adc_buffer;
 };
-
-/*******************************************************************************
- * PRU access functions
- ******************************************************************************/
-void set_scan_enabled(struct stm_dev *stmdev, bool enable) {
-	stmdev->arm_pru1_share->scan_en = enable;
-}
-
-bool is_scan_enabled(struct stm_dev *stmdev) {
-	return stmdev->arm_pru1_share->scan_en;
-}
 
 /*******************************************************************************
  * File operations
@@ -85,8 +75,8 @@ bool is_scan_enabled(struct stm_dev *stmdev) {
 #define to_stmdev(dev) container_of((dev), struct stm_dev, miscdev)
 
 static int stm_f_open(struct inode *inode, struct file *filp) {
-	struct stm_dev *stmdev = to_stmdev(filp->private_data);
-	struct device *dev = stmdev->miscdev.this_device;
+	// struct stm_dev *stmdev = to_stmdev(filp->private_data);
+	//struct device *dev = stmdev->miscdev.this_device;
 
 	return 0;
 }
@@ -95,36 +85,39 @@ ssize_t stm_f_write(struct file *filp, const char *buf, size_t count, loff_t *f_
 	struct stm_dev *stmdev = to_stmdev(filp->private_data);
 	struct device *dev = stmdev->miscdev.this_device;
 	size_t write_cnt;
-	void *pattern_buf_pos;
-	struct scan_point m;
+	void *pattern_buffer_pos;
 
-	if (stmdev->pattern_buf == NULL) {
+	if (stmdev->pattern_buffer == NULL) {
 		dev_warn(dev, "Tried to write to pattern buffer, but no memory has been assigned to it\n");
 		return -ENOBUFS;
 	}
 
 	if (count % sizeof(struct scan_point) != 0) {
-		dev_warn(dev, "Can only write multiples of sizeof(scan_point) bytes\n");
+		dev_warn(dev, "Tried to write %d bytes, but only multiples of %d bytes are supported\n", count, sizeof(struct scan_point));
 		return -EINVAL;
 	}
 
-	write_cnt = CircularBufferPrepareBulkPush(&stmdev->arm_pru1_share->pattern_buf_ctx, stmdev->pattern_buf, &pattern_buf_pos);
+	write_cnt = CircularBufferPrepareBulkPush(&stmdev->arm_pru1_share->pattern_buffer_ctx, stmdev->pattern_buffer, &pattern_buffer_pos);
+
 
 	if (write_cnt == 0)
 		return 0;
 
 	count = min(write_cnt*sizeof(struct scan_point), count);
-	if (copy_from_user(pattern_buf_pos, buf, count)) {
+
+	dev_info(dev, "Writing %d bytes to pattern buffer\n", count);
+
+	if (copy_from_user(pattern_buffer_pos, buf, count)) {
 		dev_warn(dev, "Could not copy_from_user\n");
 		return -EFAULT;
 	}
-	CircularBufferCommitBulkPush(&stmdev->arm_pru1_share->pattern_buf_ctx, count/sizeof(struct scan_point));
+	CircularBufferCommitBulkPush(&stmdev->arm_pru1_share->pattern_buffer_ctx, count/sizeof(struct scan_point));
 
 	return count;
 }
 
 ssize_t stm_f_read(struct file *filp, char *buf, size_t count, loff_t *f_pos) {
-	struct stm_dev *stmdev = to_stmdev(filp->private_data);
+	// struct stm_dev *stmdev = to_stmdev(filp->private_data);
 	// struct device *dev = stmdev->miscdev.this_device;
 	// size_t read_cnt;
 	// void *scan_buf;
@@ -179,25 +172,110 @@ static ssize_t adc_value_show(struct device *dev, struct device_attribute *attr,
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru0_share->adc_value);
 }
 
-static ssize_t dac_x_manual_setpoint_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+static ssize_t pid_setpoint_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
-	if (kstrtoint(buf, 10, &stmdev->arm_pru1_share->dac_x_manual_setpoint))
+	int32_t pid_setpoint;
+
+	if (kstrtoint(buf, 10, &pid_setpoint))
 		return -EINVAL;
+	stmdev->arm_pru1_share->pid_setpoint = pid_setpoint;
 	return count;
 }
 
-static ssize_t dac_x_manual_setpoint_show(struct device *dev, struct device_attribute *attr, char *buf) {
+static ssize_t pid_setpoint_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
-	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_x_manual_setpoint);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->pid_setpoint);
 }
 
-static ssize_t pattern_buf_size_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+static ssize_t dac_x_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t dac_value;
+
+	if (is_scan_enabled(stmdev->arm_pru1_share))
+		return -EBUSY; // We cannot manually set the dac values while scan is running
+
+	if (kstrtoint(buf, 10, &dac_value))
+		return -EINVAL;
+	stmdev->arm_pru1_share->dac_x = dac_value;
+	return count;
+}
+
+static ssize_t dac_x_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_x);
+}
+
+static ssize_t dac_y_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t dac_value;
+
+	if (is_scan_enabled(stmdev->arm_pru1_share))
+		return -EBUSY; // We cannot manually set the dac values while scan is running
+
+	if (kstrtoint(buf, 10, &dac_value))
+		return -EINVAL;
+	stmdev->arm_pru1_share->dac_y = dac_value;
+	return count;
+}
+
+static ssize_t dac_y_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_y);
+}
+
+static ssize_t dac_z_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t dac_value;
+
+	if (is_pid_enabled(stmdev->arm_pru1_share))
+	  return -EBUSY; // We cannot manually set the dac values while pid loop is running
+
+	if (kstrtoint(buf, 10, &dac_value))
+		return -EINVAL;
+	stmdev->arm_pru1_share->dac_z = dac_value;
+	return count;
+}
+
+static ssize_t dac_z_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_z);
+}
+
+static ssize_t scan_enable_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	uint32_t enable;
+	if (kstrtoint(buf, 10, &enable))
+		return -EINVAL;
+  set_scan_enabled(stmdev->arm_pru1_share, (bool)enable);
+	return count;
+}
+
+static ssize_t scan_enable_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", is_scan_enabled(stmdev->arm_pru1_share));
+}
+
+static ssize_t pid_enable_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	uint32_t enable;
+	if (kstrtoint(buf, 10, &enable))
+		return -EINVAL;
+  set_pid_enabled(stmdev->arm_pru1_share, (bool)enable);
+	return count;
+}
+
+static ssize_t pid_enable_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", is_pid_enabled(stmdev->arm_pru1_share));
+}
+
+static ssize_t pattern_buffer_size_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
 	size_t new_size;
 	dma_addr_t dma_handle;
 
 	// Check if scan is currently running (We cant resize the pattern buffer when running)
-	if (is_scan_enabled(stmdev)) {
+	if (is_scan_enabled(stmdev->arm_pru1_share)) {
 		dev_warn(dev, "Tried to set pattern buffer size while scan is running");
 		return -EBUSY;
 	}
@@ -212,56 +290,82 @@ static ssize_t pattern_buf_size_store(struct device *dev, struct device_attribut
 		return -EINVAL;
 	}
 
-	CircularBufferReset(&stmdev->arm_pru1_share->pattern_buf_ctx);
+	CircularBufferReset(&stmdev->arm_pru1_share->pattern_buffer_ctx);
 
 	// Free the previously allocated buffer memory
-	if (stmdev->pattern_buf != NULL) {
+	if (stmdev->pattern_buffer != NULL) {
 		dma_free_coherent(dev,
-			(stmdev->arm_pru1_share->pattern_buf_ctx.max_size+1)*sizeof(struct scan_point),
-			stmdev->pattern_buf,
-			stmdev->arm_pru1_share->pattern_buf);
-		stmdev->pattern_buf = NULL;
-		stmdev->arm_pru1_share->pattern_buf = NULL;
+			(stmdev->arm_pru1_share->pattern_buffer_ctx.max_size+1)*sizeof(struct scan_point),
+			stmdev->pattern_buffer,
+			(dma_addr_t)stmdev->arm_pru1_share->pattern_buffer);
+		stmdev->pattern_buffer = NULL;
+		stmdev->arm_pru1_share->pattern_buffer = NULL;
 	}
 
 	if (new_size > 0) {
-		stmdev->pattern_buf = dma_alloc_coherent(dev,
+		stmdev->pattern_buffer = dma_alloc_coherent(dev,
 												 new_size*sizeof(struct scan_point),
 												 &dma_handle,
 												 GFP_KERNEL);
-		if (!stmdev->pattern_buf) {
+		if (!stmdev->pattern_buffer) {
 			dev_err(dev, "Scan buffer allocation failed\n");
 			return -EFAULT;
 		}
-		stmdev->arm_pru1_share->pattern_buf = NULL;
-		dev_info(dev, "Allocated pattern buffer memory. Physical addr: %x", dma_handle);
-		CircularBufferInit(&stmdev->arm_pru1_share->pattern_buf_ctx, new_size, sizeof(struct scan_point));
+		stmdev->arm_pru1_share->pattern_buffer = (void*)dma_handle;
+		dev_info(dev, "Allocated pattern buffer memory for %d entries. Physical addr: %x", new_size, dma_handle);
+		CircularBufferInit(&stmdev->arm_pru1_share->pattern_buffer_ctx, new_size, sizeof(struct scan_point));
 	}
 
 	return count;
 }
 
-static ssize_t pattern_buf_size_show(struct device *dev, struct device_attribute *attr, char *buf) {
+static ssize_t pattern_buffer_size_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
-	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->pattern_buf_ctx.max_size+1);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->pattern_buffer_ctx.max_size+1);
 }
 
-static ssize_t pattern_buf_used_show(struct device *dev, struct device_attribute *attr, char *buf) {
+static ssize_t pattern_buffer_used_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
-	return snprintf(buf, PAGE_SIZE, "%d", CircularBufferSize(&stmdev->arm_pru1_share->pattern_buf_ctx));
+	return snprintf(buf, PAGE_SIZE, "%d", CircularBufferSize(&stmdev->arm_pru1_share->pattern_buffer_ctx));
 }
 
+static ssize_t bias_voltage_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t dac_bias;
+	if (kstrtoint(buf, 10, &dac_bias))
+		return -EINVAL;
+	dev_info(dev, "Setting bias voltage to %d\n", dac_bias);
+	stmdev->arm_pru1_share->dac_bias = dac_bias;
+	return count;
+}
+
+static ssize_t bias_voltage_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_bias);
+}
 
 static DEVICE_ATTR(adc_value, S_IRUGO, adc_value_show, NULL);
-static DEVICE_ATTR(dac_x_manual_setpoint, S_IWUSR | S_IRUGO, dac_x_manual_setpoint_show, dac_x_manual_setpoint_store);
-static DEVICE_ATTR(pattern_buf_size, S_IWUSR | S_IRUGO, pattern_buf_size_show, pattern_buf_size_store);
-static DEVICE_ATTR(pattern_buf_used, S_IRUGO, pattern_buf_used_show, NULL);
+static DEVICE_ATTR(pid_setpoint, S_IWUSR | S_IRUGO, pid_setpoint_show, pid_setpoint_store);
+static DEVICE_ATTR(dac_x, S_IWUSR | S_IRUGO, dac_x_show, dac_x_store);
+static DEVICE_ATTR(dac_y, S_IWUSR | S_IRUGO, dac_y_show, dac_y_store);
+static DEVICE_ATTR(dac_z, S_IWUSR | S_IRUGO, dac_z_show, dac_z_store);
+static DEVICE_ATTR(scan_enable, S_IWUSR | S_IRUGO, scan_enable_show, scan_enable_store);
+static DEVICE_ATTR(pid_enable, S_IWUSR | S_IRUGO, pid_enable_show, pid_enable_store);
+static DEVICE_ATTR(pattern_buffer_size, S_IWUSR | S_IRUGO, pattern_buffer_size_show, pattern_buffer_size_store);
+static DEVICE_ATTR(pattern_buffer_used, S_IRUGO, pattern_buffer_used_show, NULL);
+static DEVICE_ATTR(bias_voltage, S_IWUSR | S_IRUGO, bias_voltage_show, bias_voltage_store);
 
 static struct attribute *stm_attributes[] = {
 	&dev_attr_adc_value.attr,
-	&dev_attr_dac_x_manual_setpoint.attr,
-	&dev_attr_pattern_buf_size.attr,
-	&dev_attr_pattern_buf_used.attr,
+	&dev_attr_pid_setpoint.attr,
+	&dev_attr_dac_x.attr,
+	&dev_attr_dac_y.attr,
+	&dev_attr_dac_z.attr,
+	&dev_attr_scan_enable.attr,
+	&dev_attr_pid_enable.attr,
+	&dev_attr_pattern_buffer_size.attr,
+	&dev_attr_pattern_buffer_used.attr,
+	&dev_attr_bias_voltage.attr,
 	NULL
 };
 
@@ -275,9 +379,6 @@ static int stm_probe(struct platform_device *pdev) {
 	struct device_node *node = pdev->dev.of_node;
 	const struct of_device_id *match;
 	int ret;
-
-	void *buf;
-	dma_addr_t dma_addr;
 
     pr_info("STM Driver probe\n");
 
@@ -429,6 +530,8 @@ static int stm_probe(struct platform_device *pdev) {
 		goto faildereg;
 	}
 
+
+	// Check DMA capabilities
     if (!dma_set_coherent_mask(dev, DMA_BIT_MASK(64))) {
         dev_info(dev, "Using 64 bit DMA mask");
     } else if (!dma_set_coherent_mask(dev, DMA_BIT_MASK(32))) {
@@ -441,9 +544,9 @@ static int stm_probe(struct platform_device *pdev) {
         dev_info(dev, "Using 24 bit DMA mask");
     }
 
-	CircularBufferInit(&stmdev->arm_pru1_share->pattern_buf_ctx, 0, sizeof(struct scan_point));
-	stmdev->pattern_buf = NULL;
-	stmdev->arm_pru1_share->pattern_buf = NULL;
+	CircularBufferInit(&stmdev->arm_pru1_share->pattern_buffer_ctx, 0, sizeof(struct scan_point));
+	stmdev->pattern_buffer = NULL;
+	stmdev->arm_pru1_share->pattern_buffer = NULL;
 	pr_info("Initialized empty circular scan buffer");
 
 	pr_info("Successfully loaded STM driver\n");

@@ -38,7 +38,6 @@
 // #include <string.h>
 
 typedef struct {
-    void *buf;            // Pointer to the buffer
     size_t write_pos;     // Write position
     size_t read_pos;      // Read position
     size_t element_size;  // Size of a element in the buffer
@@ -58,15 +57,13 @@ typedef struct {
  *      'element_size' is not 0
  *      'buf_size / element_size' is not power of 2.
  *
- * \param[out]  *ctx            Pointer to the circular buffer context.
- * \param[in]   buf             Pointer to a buffer.
+ * \param[out]  *ctx            Pointer to the circular buffer context
  * \param[in]   element_cnt     The number of elements the buffer can hold.
  * \param[in]   element_size    The size of an element in the buffer.
  */
-void CircularBufferInit(CircularBufferContext *ctx, void *buf, size_t element_cnt,
+void CircularBufferInit(volatile CircularBufferContext *ctx, size_t element_cnt,
                         size_t element_size)
 {
-    ctx->buf = buf;
     ctx->write_pos = 0u;
     ctx->read_pos = 0u;
     ctx->element_size = element_size;
@@ -81,24 +78,14 @@ void CircularBufferInit(CircularBufferContext *ctx, void *buf, size_t element_cn
  *
  * \param[out]  *ctx            Pointer to the circular buffer context.
  */
-void CircularBufferReset(CircularBufferContext *ctx)
+void CircularBufferReset(volatile CircularBufferContext *ctx)
 {
     ctx->write_pos = 0u;
     ctx->read_pos = 0u;
 }
 
-/*!
- * \breif Check if a buffer is allocated and assigned for the circular buffer
- *
- * \return                      true if buffer is available, else false
- */
-bool CircularBufferIsAllocated(CircularBufferContext *ctx)
-{
-    return (ctx->buf != NULL);
-}
 
-
-bool CircularBufferFull(const CircularBufferContext *ctx)
+bool CircularBufferFull(const volatile CircularBufferContext *ctx)
 {
     const size_t write_pos = (ctx->write_pos + 1) & ctx->max_size;
     return (write_pos == ctx->read_pos);
@@ -116,12 +103,12 @@ bool CircularBufferFull(const CircularBufferContext *ctx)
  * \param[in]   val             Pointer to the source to be copied.
  * \return                      0 if success, -1 if the buffer is full.
  */
-int32_t CircularBufferPushBack(CircularBufferContext *ctx, const void *val)
+int32_t CircularBufferPushBack(volatile CircularBufferContext *ctx, char *buf, const void *val)
 {
     if (CircularBufferFull(ctx))
         return -1;
 
-    memcpy(&ctx->buf[ctx->write_pos * ctx->element_size], val, ctx->element_size);
+    memcpy(&buf[ctx->write_pos * ctx->element_size], val, ctx->element_size);
     ctx->write_pos = (ctx->write_pos + 1) & ctx->max_size;
 
     return 0;
@@ -137,12 +124,12 @@ int32_t CircularBufferPushBack(CircularBufferContext *ctx, const void *val)
  * \param[out]   buf            Pointer to a pointer to a buffer
  * \return                      Number of elements that can be copied to the buffer address
  */
-size_t CircularBufferPrepareBulkPush(CircularBufferContext *ctx, void **buf)
+size_t CircularBufferPrepareBulkPush(volatile CircularBufferContext *ctx, char *buf, void **buf_pos)
 {
     if (CircularBufferFull(ctx))
         return 0;
 
-    *buf = &ctx->buf[ctx->write_pos * ctx->element_size];
+    *buf_pos = &buf[ctx->write_pos * ctx->element_size];
 
     if (ctx->write_pos >= ctx->read_pos) {
         // Write pointer is ahead of read pointer in the linear buffer, thus
@@ -159,7 +146,7 @@ size_t CircularBufferPrepareBulkPush(CircularBufferContext *ctx, void **buf)
     }
 }
 
-void CircularBufferCommitBulkPush(CircularBufferContext *ctx, size_t elements_written)
+void CircularBufferCommitBulkPush(volatile CircularBufferContext *ctx, size_t elements_written)
 {
     // Increment the write counter by elements_written. This should not wrap
     // the linear buffer, but for safety reasons we AND it with max_size
@@ -180,13 +167,13 @@ void CircularBufferCommitBulkPush(CircularBufferContext *ctx, size_t elements_wr
  * \return                      0 if success, -1 if the buffer is
  *                              empty.
  */
-int32_t CircularBufferPopFront(CircularBufferContext *ctx, void *val)
+int32_t CircularBufferPopFront(volatile CircularBufferContext *ctx, char *buf, void *val)
 {
     // Check if empty
     if (ctx->read_pos == ctx->write_pos)
         return -1;
 
-    memcpy(val, &ctx->buf[ctx->read_pos * ctx->element_size], ctx->element_size);
+    memcpy(val, &buf[ctx->read_pos * ctx->element_size], ctx->element_size);
 
     ctx->read_pos = (ctx->read_pos + 1) & ctx->max_size;
 
@@ -194,9 +181,9 @@ int32_t CircularBufferPopFront(CircularBufferContext *ctx, void *val)
 }
 
 
-size_t CircularBufferPrepareBulkPop(CircularBufferContext *ctx, void **buf)
+size_t CircularBufferPrepareBulkPop(volatile CircularBufferContext *ctx, char *buf, char **buf_pos)
 {
-    *buf = &ctx->buf[ctx->read_pos * ctx->element_size];
+    *buf_pos = &buf[ctx->read_pos * ctx->element_size];
 
     if (ctx->read_pos > ctx->write_pos) {
         // Read pointer is ahead of write pointer in the linear buffer, thus
@@ -209,7 +196,7 @@ size_t CircularBufferPrepareBulkPop(CircularBufferContext *ctx, void **buf)
     }
 }
 
-void CircularBufferCommitBulkPop(CircularBufferContext *ctx, size_t elemets_read)
+void CircularBufferCommitBulkPop(volatile CircularBufferContext *ctx, size_t elemets_read)
 {
     // Increment the write counter by elements_written. This should not wrap
     // the linear buffer, but for safety reasons we AND it with max_size
@@ -231,12 +218,13 @@ void CircularBufferCommitBulkPop(CircularBufferContext *ctx, size_t elemets_read
  * \return                      0 if success, -1 or NULL buffer is empty or the
  *                              'num' is out of bounds.
  */
-int32_t CircularBufferPeek(const CircularBufferContext *ctx, size_t num,
+int32_t CircularBufferPeek(const volatile CircularBufferContext *ctx, char *buf, size_t num,
                            void **elem)
 {
     const size_t write_pos = ctx->write_pos;
     const size_t read_pos = ctx->read_pos;
     const size_t size = ((write_pos - read_pos) & ctx->max_size);
+    const size_t element_pos = ((read_pos + num) & ctx->max_size);
 
     // Check that the buffer isn't empty and
     // that num is less than number of added elements
@@ -244,8 +232,7 @@ int32_t CircularBufferPeek(const CircularBufferContext *ctx, size_t num,
         goto fail;
     }
 
-    const size_t element_pos = ((read_pos + num) & ctx->max_size);
-    *elem = &ctx->buf[element_pos * ctx->element_size];
+    *elem = &buf[element_pos * ctx->element_size];
 
     return 0;
 
@@ -262,7 +249,7 @@ fail:
  * \param[in] *ctx              Pointer to the circular buffer context.
  * \return                      The number of added elements.
  */
-size_t CircularBufferSize(const CircularBufferContext *ctx)
+size_t CircularBufferSize(const volatile CircularBufferContext *ctx)
 {
     return ((ctx->write_pos - ctx->read_pos) & ctx->max_size);
 }
@@ -276,7 +263,7 @@ size_t CircularBufferSize(const CircularBufferContext *ctx)
  * \param[in] *ctx              Pointer to the circular buffer context.
  * \return                      The number of free elements.
  */
-size_t CircularBufferSpace(const CircularBufferContext *ctx)
+size_t CircularBufferSpace(const volatile CircularBufferContext *ctx)
 {
     return (ctx->max_size - CircularBufferSize(ctx));
 }
@@ -290,7 +277,7 @@ size_t CircularBufferSpace(const CircularBufferContext *ctx)
  * \param[in] *ctx              Pointer to the circular buffer context.
  * \return                      true if the buffer is empty otherwise false.
  */
-bool CircularBufferEmpty(const CircularBufferContext *ctx)
+bool CircularBufferEmpty(const volatile CircularBufferContext *ctx)
 {
     return (ctx->read_pos == ctx->write_pos);
 }

@@ -1,5 +1,5 @@
-#ifndef STM_PRU1_H
-#define STM_PRU1_H
+#ifndef SHARED_CONTEXT_H
+#define SHARED_CONTEXT_H
 
 #include "../common/circularbuffer.h"
 
@@ -9,21 +9,25 @@ struct scan_point {
 };
 
 // magic word
+#define ARM_PRU0_SHARE_MAGIC 0x66AA00
 #define ARM_PRU1_SHARE_MAGIC 0x66AA01
 
-struct arm_pru1_share {
-   uint32_t magic;
+struct shared_context {
+   uint32_t pru0_magic;
+   uint32_t pru1_magic;
 
    uint32_t scan_enable;
    uint32_t pid_enable;
 
-   int32_t pid_setpoint;
+   CircularBufferContext pattern_buffer_ctx;
+   void *pattern_buffer;
+
+   int32_t adc_value;
+
+   int32_t adc_setpoint;
    int32_t pid_kp;
    int32_t pid_ki;
    int32_t pid_kd;
-
-   CircularBufferContext pattern_buffer_ctx;
-   void *pattern_buffer;
 
    int32_t dac_x;
    int32_t dac_y;
@@ -47,4 +51,4 @@ bool is_pid_enabled(volatile struct arm_pru1_share *share) {
 	return (bool)share->pid_enable;
 }
 
-#endif /* STM_PRU1_H */
+#endif /* SHARED_CONTEXT_H */

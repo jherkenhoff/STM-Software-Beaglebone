@@ -14,7 +14,7 @@ ADC
 
 #include "resource_table_0.h"
 #include "pru_defs.h"
-#include "arm_pru0_share.h"
+#include "stm-pru0.h"
 
 /* Structure describing the shared context structure shared with the ARM host.
  * Compiler attributes place this at 0x0000 */
@@ -26,8 +26,8 @@ void adc_init() {
 	CLR_PIN(PIN_ADC_MOSI);
 }
 
-uint32_t read_adc_value() {
-	uint32_t value = 0;
+int32_t read_adc_value() {
+	int32_t value = 0;
 	size_t i;
 	for (i = 0; i < 18; i++) {
 		value = value<<1;
@@ -41,7 +41,12 @@ uint32_t read_adc_value() {
 		__delay_cycles(100);
 	}
 
-	return value;
+	// Convert the 18 bit adc value to a signed 32 bit value (https://en.wikipedia.org/wiki/Sign_extension)
+	// If the sign bit (bit 17) is set, we need to pad the 32 word with ones on the left side:
+	if (value & (1<<17))
+		return ~((1<<18)-1) | value;
+	else
+		return value;
 }
 
 void adc_trigger_conv() {
@@ -55,6 +60,7 @@ bool adc_busy() {
 }
 
 void main(void) {
+	  int32_t adc_value;
 		arm_share.magic = ARM_PRU0_SHARE_MAGIC;
 
 		/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
@@ -64,8 +70,9 @@ void main(void) {
 
 		while (1) {
 				adc_trigger_conv();
-
 				while(adc_busy());
-				arm_share.adc_value = read_adc_value();
+				adc_value = read_adc_value();
+
+				arm_share.adc_value = adc_value;
 		}
 }
