@@ -344,16 +344,17 @@ static ssize_t bias_voltage_show(struct device *dev, struct device_attribute *at
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_bias);
 }
 
-static DEVICE_ATTR(adc_value, S_IRUGO, adc_value_show, NULL);
-static DEVICE_ATTR(pid_setpoint, S_IWUSR | S_IRUGO, pid_setpoint_show, pid_setpoint_store);
-static DEVICE_ATTR(dac_x, S_IWUSR | S_IRUGO, dac_x_show, dac_x_store);
-static DEVICE_ATTR(dac_y, S_IWUSR | S_IRUGO, dac_y_show, dac_y_store);
-static DEVICE_ATTR(dac_z, S_IWUSR | S_IRUGO, dac_z_show, dac_z_store);
-static DEVICE_ATTR(scan_enable, S_IWUSR | S_IRUGO, scan_enable_show, scan_enable_store);
-static DEVICE_ATTR(pid_enable, S_IWUSR | S_IRUGO, pid_enable_show, pid_enable_store);
-static DEVICE_ATTR(pattern_buffer_size, S_IWUSR | S_IRUGO, pattern_buffer_size_show, pattern_buffer_size_store);
-static DEVICE_ATTR(pattern_buffer_used, S_IRUGO, pattern_buffer_used_show, NULL);
-static DEVICE_ATTR(bias_voltage, S_IWUSR | S_IRUGO, bias_voltage_show, bias_voltage_store);
+// Everyone is allowed to read (0444), but only owner and group are allowed to write (0664)
+static DEVICE_ATTR(adc_value, 0444, adc_value_show, NULL);
+static DEVICE_ATTR(pid_setpoint, 0664, pid_setpoint_show, pid_setpoint_store);
+static DEVICE_ATTR(dac_x, 0664, dac_x_show, dac_x_store);
+static DEVICE_ATTR(dac_y, 0664, dac_y_show, dac_y_store);
+static DEVICE_ATTR(dac_z, 0664, dac_z_show, dac_z_store);
+static DEVICE_ATTR(scan_enable, 0664, scan_enable_show, scan_enable_store);
+static DEVICE_ATTR(pid_enable, 0664, pid_enable_show, pid_enable_store);
+static DEVICE_ATTR(pattern_buffer_size, 0664, pattern_buffer_size_show, pattern_buffer_size_store);
+static DEVICE_ATTR(pattern_buffer_used, 0444, pattern_buffer_used_show, NULL);
+static DEVICE_ATTR(bias_voltage, 0664, bias_voltage_show, bias_voltage_store);
 
 static struct attribute *stm_attributes[] = {
 	&dev_attr_adc_value.attr,
