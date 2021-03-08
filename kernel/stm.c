@@ -167,6 +167,23 @@ static const struct file_operations stm_fops = {
 
 
 /**** Sysfs attributes ********************************************************/
+static ssize_t adc_averages_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t averages;
+
+	if (kstrtoint(buf, 10, &averages))
+		return -EINVAL;
+	if (averages == 0)
+		return -EINVAL;
+	stmdev->arm_pru0_share->adc_averages = averages;
+	return count;
+}
+
+static ssize_t adc_averages_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru0_share->adc_averages);
+}
+
 static ssize_t adc_value_show(struct device *dev, struct device_attribute *attr, char *buf) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru0_share->adc_value);
@@ -345,6 +362,7 @@ static ssize_t bias_voltage_show(struct device *dev, struct device_attribute *at
 }
 
 // Everyone is allowed to read (0444), but only owner and group are allowed to write (0664)
+static DEVICE_ATTR(adc_averages, 0664, adc_averages_show, adc_averages_store);
 static DEVICE_ATTR(adc_value, 0444, adc_value_show, NULL);
 static DEVICE_ATTR(pid_setpoint, 0664, pid_setpoint_show, pid_setpoint_store);
 static DEVICE_ATTR(dac_x, 0664, dac_x_show, dac_x_store);
@@ -357,6 +375,7 @@ static DEVICE_ATTR(pattern_buffer_used, 0444, pattern_buffer_used_show, NULL);
 static DEVICE_ATTR(bias_voltage, 0664, bias_voltage_show, bias_voltage_store);
 
 static struct attribute *stm_attributes[] = {
+	&dev_attr_adc_averages.attr,
 	&dev_attr_adc_value.attr,
 	&dev_attr_pid_setpoint.attr,
 	&dev_attr_dac_x.attr,

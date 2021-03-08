@@ -35,10 +35,10 @@ int32_t read_adc_value() {
 		CLR_PIN(PIN_ADC_CLK);
 		if IS_PIN_SET(PIN_ADC_MISO)
 			value = value | 1;
-		__delay_cycles(100);
+		__delay_cycles(4);
 		// TODO: Sample
 		SET_PIN(PIN_ADC_CLK);
-		__delay_cycles(100);
+		__delay_cycles(5);
 	}
 
 	// Convert the 18 bit adc value to a signed 32 bit value (https://en.wikipedia.org/wiki/Sign_extension)
@@ -55,24 +55,36 @@ void adc_trigger_conv() {
 	CLR_PIN(PIN_ADC_CONV);
 }
 
-bool adc_busy() {
+bool is_adc_busy() {
 	return IS_PIN_SET(PIN_ADC_BUSY);
 }
 
+
+int32_t get_adc_average(uint32_t averages) {
+	int32_t average_value = 0;
+	size_t i;
+
+	for (i = 0; i < averages; i++) {
+		adc_trigger_conv();
+		while(is_adc_busy());
+		average_value = average_value+read_adc_value();
+	}
+	return average_value/(int32_t)averages;
+}
+
 void main(void) {
-	  int32_t adc_value;
-		arm_share.magic = ARM_PRU0_SHARE_MAGIC;
+	int32_t adc_value;
+	arm_share.magic = ARM_PRU0_SHARE_MAGIC;
+	arm_share.adc_averages = 1;
 
-		/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
-		CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
+	/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
+	CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
 
-		adc_init();
+	adc_init();
 
-		while (1) {
-				adc_trigger_conv();
-				while(adc_busy());
-				adc_value = read_adc_value();
+	while (1) {
+		adc_value = get_adc_average(arm_share.adc_averages);
 
-				arm_share.adc_value = adc_value;
-		}
+		arm_share.adc_value = adc_value;
+	}
 }

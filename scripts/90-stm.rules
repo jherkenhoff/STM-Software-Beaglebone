@@ -3,6 +3,6 @@
 # Change permission of device file
 KERNEL=="stm", MODE="0666", GROUP="stm"
 # Change group to stm
-KERNEL=="stm", PROGRAM="/bin/sh -c 'for a in adc_value bias_voltage dac_x dac_y dac_z pattern_buffer_size pattern_buffer_used pid_enable pid_setpoint scan_enable; do chown root:stm /sys/devices/virtual/misc/stm/$a; done'"
+KERNEL=="stm", PROGRAM="/bin/sh -c 'for a in adc_averages adc_value bias_voltage dac_x dac_y dac_z pattern_buffer_size pattern_buffer_used pid_enable pid_setpoint scan_enable; do chown root:stm /sys/devices/virtual/misc/stm/$a; done'"
 # Change permissions to ensure user+group read/write permissions
-KERNEL=="stm", PROGRAM="/bin/sh -c 'for a in adc_value bias_voltage dac_x dac_y dac_z pattern_buffer_size pattern_buffer_used pid_enable pid_setpoint scan_enable; do chmod ug+rw /sys/devices/virtual/misc/stm/$a; done'"
+KERNEL=="stm", PROGRAM="/bin/sh -c 'for a in adc_averages adc_value bias_voltage dac_x dac_y dac_z pattern_buffer_size pattern_buffer_used pid_enable pid_setpoint scan_enable; do chmod ug+rw /sys/devices/virtual/misc/stm/$a; done'"

@@ -10,6 +10,8 @@ struct arm_pru0_share {
    uint32_t magic;
 
    int32_t adc_value;
+
+   uint32_t adc_averages;
 };
 
 #endif /* STM_PRU0_H */
