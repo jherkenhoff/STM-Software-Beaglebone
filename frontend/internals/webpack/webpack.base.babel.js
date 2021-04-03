@@ -105,6 +105,22 @@ module.exports = options => ({
           },
         },
       },
+      // https://github.com/esnet/react-timeseries-charts/issues/88
+      {
+        test: /\.(m?js)$/,
+        include: /node_modules\/moment\//,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            plugins: [
+              ["@babel/plugin-transform-modules-commonjs", {
+                "allowTopLevelThis": true
+              }],
+              "add-module-exports"
+            ]
+          }
+        }
+      }
     ],
   },
   plugins: options.plugins.concat([

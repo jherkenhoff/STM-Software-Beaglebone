@@ -1,8 +1,9 @@
 import { createGlobalStyle } from 'styled-components';
 
+import 'semantic-ui-css/semantic.min.css'
+
 const GlobalStyle = createGlobalStyle`
-  html,
-  body {
+  html, body, #app {
     height: 100%;
     width: 100%;
   }
@@ -17,14 +18,18 @@ const GlobalStyle = createGlobalStyle`
 
   #app {
     background-color: #fafafa;
-    min-height: 100%;
-    min-width: 100%;
   }
 
-  p,
-  label {
-    font-family: Georgia, Times, 'Times New Roman', serif;
-    line-height: 1.5em;
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+
+  input[type=number] {
+    -moz-appearance: textfield;
   }
 `;
 
