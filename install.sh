@@ -40,3 +40,14 @@ install_udev_rules() {
 
 create_stm_group
 install_udev_rules
+
+pip3 install wheel
+
+pushd pystm/
+pip3 install .
+popd
+
+pushd backend/
+echo "Installing backend dependencies"
+pip3 install -r requirements.txt
+popd

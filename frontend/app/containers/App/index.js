@@ -13,7 +13,7 @@ import { connect } from 'react-redux'
 import { Switch, Route } from 'react-router-dom';
 import styled from 'styled-components';
 
-import Topbar from 'containers/Topbar';
+import TopbarContainer from 'containers/TopbarContainer';
 import NoConnection from 'components/NoConnection';
 import Dashboard from 'containers/Dashboard';
 import NotFoundPage from 'containers/NotFoundPage/Loadable';
@@ -34,7 +34,7 @@ const MainWrapper = styled.div`
 function App(props) {
   return (
     <AppWrapper>
-      <Topbar tunneling={props.tunneling} pid={props.pid} scan={props.scan}/>
+      <TopbarContainer />
       <Switch>
         <Route exact path="/" component={Dashboard} />
         <Route component={NotFoundPage} />
@@ -50,7 +50,7 @@ function mapStateToProps(state) {
     tunneling: true,
     pid: state.pid.enabled,
     scan: false,
-    connected: state.status.connection
+    connected: state.monitor.connection
   }
 }
 

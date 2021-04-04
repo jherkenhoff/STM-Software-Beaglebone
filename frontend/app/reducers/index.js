@@ -6,13 +6,13 @@ import { combineReducers } from 'redux';
 import { connectRouter } from 'connected-react-router';
 
 import history from 'utils/history';
-import status from './status'
+import monitor from './monitor'
 import pid from './pid'
 import scan from './scan'
 
 export default combineReducers({
     router: connectRouter(history),
-    status,
+    monitor,
     pid,
     scan
   });

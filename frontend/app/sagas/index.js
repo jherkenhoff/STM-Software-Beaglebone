@@ -1,13 +1,21 @@
-import { takeEvery, take, put, call } from 'redux-saga/effects'
+import { takeEvery, take, put, call, fork } from 'redux-saga/effects'
 import { eventChannel } from 'redux-saga'
 
-import { socketConnectionChanged, pidEnableChanged, tipCurrentChanged } from 'actions'
+import {
+  SET_MONITOR_INTERVAL,
+  socketConnectionChanged,
+  pidEnableChanged,
+  tipCurrentChanged,
+  temperatureChanged,
+  updateMonitorInterval,
+  addLogMessage
+} from 'actions'
 
 
 import { io } from 'socket.io-client';
 
 function openSocket() {
-  return io("127.0.0.1:5000")
+  return io("192.168.0.52:5000")
 }
 
 // Event channel that listens on connect/disconnect events
@@ -46,7 +54,7 @@ function createSocketAction(socket, name, action) {
   })
 }
 
-function createSocketHandler(socket, name) {
+function createSocketChannel(socket, name) {
   return eventChannel(emit => {
     const handler = (value) => {
       emit(value);
@@ -70,17 +78,43 @@ function* handlePidEnabledChanged(enable) {
   yield put(pidEnableChanged(enable))
 }
 
-function* handleTipCurrentChanged(value) {
-  yield put(tipCurrentChanged(value))
+function* handleTipCurrentChanged(descriptor) {
+  yield put(tipCurrentChanged(descriptor["time"]/1e6, descriptor["current"]*1e9))
+}
+
+function* handleTemperatureChanged(descriptor) {
+  yield put(temperatureChanged(descriptor["time"]/1e6, descriptor["mainboard"], descriptor["supply"]))
+}
+
+function* handleMonitorIntervalChanges(socket) {
+  while (true) {
+    let action = yield take(SET_MONITOR_INTERVAL)
+    yield socket.emit("set_monitor_interval", action.interval)
+  }
+}
+
+function* handleUpdateMonitorInterval(interval) {
+  yield put(updateMonitorInterval(interval))
+}
+
+function* handleLog(entry) {
+  yield put(addLogMessage(entry))
 }
 
 export function* rootSaga() {
   const socket = yield call(openSocket)
   const socketMonitorChannel = yield call(createSocketMonitorChannel, socket)
-  const pidEnabledChannel = yield call(createSocketHandler, socket, "pid_enabled")
-  const tipCurrentChannel = yield call(createSocketHandler, socket, "tip_current")
+  const pidEnabledChannel = yield call(createSocketChannel, socket, "pid_enabled")
+  const tipCurrentChannel = yield call(createSocketChannel, socket, "tip_current")
+  const temperatureChannel = yield call(createSocketChannel, socket, "temperature")
+  const monitorIntervalChannel = yield call(createSocketChannel, socket, "update_monitor_interval")
+  const logChannel = yield call(createSocketChannel, socket, "log")
 
   yield takeEvery(socketMonitorChannel, handleSocketChanged)
   yield takeEvery(pidEnabledChannel, handlePidEnabledChanged)
   yield takeEvery(tipCurrentChannel, handleTipCurrentChanged)
+  yield takeEvery(temperatureChannel, handleTemperatureChanged)
+  yield takeEvery(monitorIntervalChannel, handleUpdateMonitorInterval)
+  yield takeEvery(logChannel, handleLog)
+  yield fork(handleMonitorIntervalChanges, socket)
 }

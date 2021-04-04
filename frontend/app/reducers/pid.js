@@ -1,4 +1,6 @@
+import produce from 'immer';
 import { PID_ENABLE_CHANGED, TIP_CURRENT_CHANGED } from 'actions'
+
 
 const initialState = {
   enabled: false,
@@ -7,21 +9,24 @@ const initialState = {
   I: 0,
   D: 0,
   dacZ: 0,
-  tipCurrent: 0
+  tipCurrent: 0,
+  tipCurrentLog: []
 }
 
-export default function pid(state = initialState, action) {
-  switch (action.type) {
-    case PID_ENABLE_CHANGED:
-      return { ...state,
-        enabled: action.enabled
-      }
-    case TIP_CURRENT_CHANGED:
-      return { ...state,
-        tipCurrent: action.value
-      }
+const reducer = (state = initialState, action) =>
+  produce( state, draft => {
+    switch (action.type) {
+      case PID_ENABLE_CHANGED:
+        draft.enabled = action.enabled
+        break
+      case TIP_CURRENT_CHANGED:
+        draft.tipCurrent = action.current
+        if (draft.tipCurrentLog.length >= 100) {
+          draft.tipCurrentLog.shift()
+        }
+        draft.tipCurrentLog.push( {time: action.time, current: action.current} )
+        break
+    }
+  });
 
-    default:
-      return state
-  }
-}
+export default reducer;

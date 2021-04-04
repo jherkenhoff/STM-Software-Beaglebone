@@ -2,18 +2,19 @@
 import React from 'react';
 import PropTypes from "prop-types";
 
-import { Menu, Icon, Label, Progress } from 'semantic-ui-react'
+import { Menu, Icon, Label, Popup } from 'semantic-ui-react'
+import GeneralSettingsContainer from 'containers/GeneralSettingsContainer'
 
 function Topbar(props) {
   return (
-    <Menu pointing>
+    <Menu attached>
       <Menu.Item header>
         STM Control
       </Menu.Item>
 
       <Menu.Menu position='right'>
         <Menu.Item>
-          Tip Current: {props.tipCurrent.toFixed(2)}
+          Tip Current: <b>{props.tipCurrent.toFixed(3)} nA</b>
         </Menu.Item>
         <Menu.Item>
           <Label color={props.tunneling? 'olive':'grey'}>
@@ -26,9 +27,22 @@ function Topbar(props) {
             Scan
           </Label>
         </Menu.Item>
-        <Menu.Item>
-          <Icon name='settings' />
-        </Menu.Item>
+
+        <Popup
+          trigger={
+            <Menu.Item>
+              <Icon name='settings' />
+            </Menu.Item>
+          }
+          on='click'
+          position='bottom right'
+          flowing
+        >
+          <Popup.Header>Connection Settings</Popup.Header>
+          <Popup.Content>
+            <GeneralSettingsContainer />
+          </Popup.Content>
+        </Popup>
       </Menu.Menu>
     </Menu>
   );
