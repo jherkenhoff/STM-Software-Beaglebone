@@ -5,12 +5,12 @@ import { connect } from 'react-redux'
 import PropTypes from "prop-types";
 
 import DashboardCard from 'components/DashboardCard';
-import Logs from 'components/Logs';
+import CoarseApproach from 'components/CoarseApproach';
 
-function LogContainer(props) {
+function CoarseApproachContainer(props) {
   return (
-    <DashboardCard title="System Logs">
-      <Logs logs={props.logs} />
+    <DashboardCard title="Coarse Approach">
+      <CoarseApproach />
     </DashboardCard>
   );
 }
@@ -25,4 +25,4 @@ const withConnect = connect(
   mapStateToProps
 );
 
-export default compose(withConnect)(LogContainer);
+export default compose(withConnect)(CoarseApproachContainer);

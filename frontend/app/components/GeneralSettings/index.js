@@ -25,8 +25,8 @@ function GeneralSettings(props) {
 GeneralSettings.propTypes = {
   monitorMemory: PropTypes.number,
   monitorInterval: PropTypes.number,
-  onMonitorIntervalChanged: PropTypes.function,
-  onMonitorMemoryChanged: PropTypes.function
+  onMonitorIntervalChanged: PropTypes.func,
+  onMonitorMemoryChanged: PropTypes.func
 };
 
 export default GeneralSettings;

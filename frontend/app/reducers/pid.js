@@ -1,5 +1,5 @@
 import produce from 'immer';
-import { PID_ENABLE_CHANGED, TIP_CURRENT_CHANGED } from 'actions'
+import { TIP_MONITOR_UPDATE, UPDATE_PID_ENABLED, UPDATE_PID_P, UPDATE_PID_I, UPDATE_PID_D, UPDATE_PID_SETPOINT } from 'actions'
 
 
 const initialState = {
@@ -7,24 +7,26 @@ const initialState = {
   setpoint: 0,
   P: 0,
   I: 0,
-  D: 0,
-  dacZ: 0,
-  tipCurrent: 0,
-  tipCurrentLog: []
+  D: 0
 }
 
 const reducer = (state = initialState, action) =>
   produce( state, draft => {
     switch (action.type) {
-      case PID_ENABLE_CHANGED:
+      case UPDATE_PID_ENABLED:
         draft.enabled = action.enabled
         break
-      case TIP_CURRENT_CHANGED:
-        draft.tipCurrent = action.current
-        if (draft.tipCurrentLog.length >= 100) {
-          draft.tipCurrentLog.shift()
-        }
-        draft.tipCurrentLog.push( {time: action.time, current: action.current} )
+      case UPDATE_PID_P:
+        draft.P = action.value
+        break
+      case UPDATE_PID_I:
+        draft.I = action.value
+        break
+      case UPDATE_PID_D:
+        draft.D = action.value
+        break
+      case UPDATE_PID_SETPOINT:
+        draft.setpoint = action.value
         break
     }
   });

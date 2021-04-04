@@ -14,7 +14,7 @@ function Topbar(props) {
 
       <Menu.Menu position='right'>
         <Menu.Item>
-          Tip Current: <b>{props.tipCurrent.toFixed(3)} nA</b>
+          Tip Current: <b>{(props.tipCurrent*1e9).toFixed(3)} nA</b>
         </Menu.Item>
         <Menu.Item>
           <Label color={props.tunneling? 'olive':'grey'}>

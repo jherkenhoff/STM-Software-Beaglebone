@@ -9,10 +9,12 @@ import history from 'utils/history';
 import monitor from './monitor'
 import pid from './pid'
 import scan from './scan'
+import tipMonitor from './tipMonitor'
 
 export default combineReducers({
     router: connectRouter(history),
     monitor,
     pid,
-    scan
+    scan,
+    tipMonitor
   });

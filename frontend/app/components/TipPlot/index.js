@@ -10,7 +10,6 @@ function TipPlot(props) {
 
   const options = {
     chart: {
-      id: "basic-bar",
       animations: {
         enabled: false
       },
@@ -21,15 +20,6 @@ function TipPlot(props) {
         enabled: false
       },
     },
-    legend: {
-      position: "top",
-      horizontalAlign: 'right',
-    },
-    title: {
-      text: 'Average High & Low Temperature',
-      align: 'left',
-      floating: true
-    },
     stroke: {
       width: 2
     },
@@ -39,20 +29,29 @@ function TipPlot(props) {
         format: 'HH:mm:ss',
       }
     },
-    yaxis: {
+    yaxis: [{
       tickAmount: 3,
       decimalsInFloat: 3,
       title: {
         text: "Tip Current / nA"
       },
-    },
+    }, {
+      opposite: true,
+      tickAmount: 3,
+      decimalsInFloat: 3,
+      title: {
+        text: "Z Coordinate"
+      },
+    }],
     annotations: {
       yaxis: [
         {
-          y: -3.108,
+          y: props.pidSetpoint*1e9,
           borderColor: '#00E396',
           label: {
             text: 'PID Setpoint',
+            textAnchor: "start",
+            position: "left",
             borderColor: '#00E396',
             style: {
               color: '#fff',
@@ -67,7 +66,10 @@ function TipPlot(props) {
   const tipCurrentSeries = [
     {
       name: "Tip Current",
-      data: props.tipCurrentLog.map( ({time, current}) => [time, current] )
+      data: props.log.map( ({time, current, x, y, z}) => [time/1e6, current*1e9] )
+    }, {
+      name: "Z Coordinate",
+      data: props.log.map( ({time, current, x, y, z}) => [time/1e6, z] )
     }
   ]
 
@@ -84,6 +86,7 @@ function TipPlot(props) {
 
 TipPlot.propTypes = {
   tipCurrentLog: PropTypes.array,
+  pidSetpoint: PropTypes.number
 };
 
 export default TipPlot;

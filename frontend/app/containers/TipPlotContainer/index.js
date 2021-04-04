@@ -10,15 +10,16 @@ import TipPlot from 'components/TipPlot';
 
 function TipPlotContainer(props) {
   return (
-    <DashboardCard title="Environment Monitor">
-      <TipPlot tipCurrentLog={props.tipCurrentLog} />
+    <DashboardCard title="Tip Monitor">
+      <TipPlot log={props.log} pidSetpoint={props.pidSetpoint}/>
     </DashboardCard>
   );
 }
 
 function mapStateToProps(state) {
   return {
-    tipCurrentLog: state.pid.tipCurrentLog,
+    log: state.tipMonitor.log,
+    pidSetpoint: state.pid.setpoint,
   }
 }
 

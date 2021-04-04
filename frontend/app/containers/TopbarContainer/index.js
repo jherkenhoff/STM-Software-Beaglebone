@@ -13,11 +13,16 @@ function TopbarContainer(props) {
 }
 
 function mapStateToProps(state) {
+  let tipCurrent = 0
+  if (state.tipMonitor.log.length >= 1) {
+    tipCurrent = state.tipMonitor.log[state.tipMonitor.log.length - 1].current
+  }
+
   return {
     tunneling: true,
     pid: state.pid.enabled,
     scan: false,
-    tipCurrent: state.pid.tipCurrent
+    tipCurrent: tipCurrent
   }
 }
 

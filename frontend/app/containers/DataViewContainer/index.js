@@ -5,19 +5,18 @@ import { connect } from 'react-redux'
 import PropTypes from "prop-types";
 
 import DashboardCard from 'components/DashboardCard';
-import Logs from 'components/Logs';
+import DataView from 'components/DataView';
 
-function LogContainer(props) {
+function DataViewContainer(props) {
   return (
-    <DashboardCard title="System Logs">
-      <Logs logs={props.logs} />
+    <DashboardCard title="Data View">
+      <DataView />
     </DashboardCard>
   );
 }
 
 function mapStateToProps(state) {
   return {
-    logs: state.monitor.logMessages,
   }
 }
 
@@ -25,4 +24,4 @@ const withConnect = connect(
   mapStateToProps
 );
 
-export default compose(withConnect)(LogContainer);
+export default compose(withConnect)(DataViewContainer);

@@ -38,35 +38,19 @@ function EnvironmentPlot(props) {
       tickAmount: 3,
       decimalsInFloat: 3,
       title: {
-        text: "Tip Current / nA"
+        text: "Mainboard Temp."
       },
-    },
-    annotations: {
-      yaxis: [
-        {
-          y: -3.108,
-          borderColor: '#00E396',
-          label: {
-            text: 'PID Setpoint',
-            borderColor: '#00E396',
-            style: {
-              color: '#fff',
-              background: '#00E396'
-            },
-          }
-        }
-      ]
     }
   }
 
   const tempSeries= [
     {
       name: "Mainboard Temp.",
-      data: props.temperatureLog.map( ({time, mainboard, supply}) => [time, mainboard] )
+      data: props.temperatureLog.map( ({time, mainboard, supply}) => [time/1e6, mainboard] )
     },
     {
       name: "Supply Temp.",
-      data: props.temperatureLog.map( ({time, mainboard, supply}) => [time, supply] )
+      data: props.temperatureLog.map( ({time, mainboard, supply}) => [time/1e6, supply] )
     }
   ]
 

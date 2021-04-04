@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 import styled from 'styled-components';
 
 
-import { Menu, Segment, Icon } from 'semantic-ui-react'
+import { Menu, Segment, Icon, Label } from 'semantic-ui-react'
 
 
 const DashboardCardWrapper = styled.div`
@@ -41,7 +41,7 @@ function DashboardCard(props) {
 }
 
 DashboardCard.propTypes = {
-  title: PropTypes.string,
+  title: PropTypes.string
 };
 
 export default DashboardCard;

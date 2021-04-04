@@ -4,6 +4,7 @@ import { compose } from 'redux'
 import { connect } from 'react-redux'
 
 import PropTypes from "prop-types";
+import { Label, Menu } from 'semantic-ui-react'
 
 import DashboardCard from 'components/DashboardCard';
 import EnvironmentPlot from 'components/EnvironmentPlot';
