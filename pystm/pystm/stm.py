@@ -1,5 +1,6 @@
 
 from os.path import join
+from .lm75 import LM75
 
 class STM:
     SYSFS_BASE_PATH = "/sys/devices/virtual/misc/stm"
@@ -8,6 +9,9 @@ class STM:
     SYSFS_ADC_AVERAGES        = join(SYSFS_BASE_PATH, "adc_averages")
     SYSFS_ADC_VALUE           = join(SYSFS_BASE_PATH, "adc_value")
     SYSFS_PID_SETPOINT        = join(SYSFS_BASE_PATH, "pid_setpoint")
+    SYSFS_PID_KP              = join(SYSFS_BASE_PATH, "pid_kp")
+    SYSFS_PID_KI              = join(SYSFS_BASE_PATH, "pid_ki")
+    SYSFS_PID_KD              = join(SYSFS_BASE_PATH, "pid_kd")
     SYSFS_DAC_X               = join(SYSFS_BASE_PATH, "dac_x")
     SYSFS_DAC_Y               = join(SYSFS_BASE_PATH, "dac_y")
     SYSFS_DAC_Z               = join(SYSFS_BASE_PATH, "dac_z")
@@ -17,23 +21,15 @@ class STM:
     SYSFS_PATTERN_BUFFER_USED = join(SYSFS_BASE_PATH, "pattern_buffer_used")
     SYSFS_BIAS_VOLTAGE        = join(SYSFS_BASE_PATH, "bias_voltage")
 
-    DEFAULT_CONFIG = {
-        "dac_calibration": {
-            "x_scale": 1,
-            "x_offset": 0,
-            "y_scale": 1,
-            "y_offset": 0,
-            "z_scale": 1,
-            "z_offset": 0
-        },
-        "adc_calibration": {
-            "scale": 1,
-            "offset": 0
-        }
-    }
+    ADC_V_REFBUF = 4.096 # Voltage on ADC Refbuf pin
+    ADC_RES      = 18    # Resolution of ADC
+    R_AMP        = 100e6 # Value of resistor in transimpedance amplifier
 
-    def __init__(self, dev_filepath = DEV_FILEPATH, sysfs_dir = SYSFS_BASE_PATH):
+    def __init__(self, dev_filepath = DEV_FILEPATH, sysfs_dir = SYSFS_BASE_PATH, i2c_bus = 1):
         self.dev_file = open(dev_filepath, "wb", )
+
+        self.lm75_supply = LM75(busnum=i2c_bus, address=0x48)
+        self.lm75_mainboard = LM75(busnum=i2c_bus, address=0x49)
 
     def set_adc_averages(self, averages):
         assert averages > 0
@@ -44,21 +40,70 @@ class STM:
         with open(self.SYSFS_ADC_AVERAGES, "r+") as f:
             return int(f.read())
 
-    def get_adc_value(self):
+    def get_adc_raw_value(self):
         with open(self.SYSFS_ADC_VALUE, "r") as f:
             return int(f.read())
 
-    def set_pid_setpoint(self, setpoint):
-        with open(self.SYSFS_PID_SETPOINT, "r+") as f:
-            f.write(str(setpoint))
+    def adc_raw2adc_voltage(self, adc_raw):
+        return adc_raw * self.ADC_V_REFBUF / 2**self.ADC_RES
 
-    def get_pid_setpoint(self):
+    def adc_voltage2adc_raw(self, adc_voltage):
+        return adc_voltage / self.ADC_V_REFBUF * 2**self.ADC_RES
+
+    def get_adc_voltage(self):
+        return self.adc_raw2adc_voltage(self.get_adc_raw_value())
+
+    def adc_voltage2tip_current(self, adc_voltage):
+        return adc_voltage/self.R_AMP
+
+    def tip_current2adc_voltage(self, tip_current):
+        return tip_current * self.R_AMP
+
+    def get_tip_current(self):
+        return self.adc_voltage2tip_current(self.get_adc_voltage())
+
+    def set_pid_setpoint_raw(self, setpoint):
+        with open(self.SYSFS_PID_SETPOINT, "r+") as f:
+            print(setpoint)
+            f.write(str(int(setpoint)))
+
+    def get_pid_setpoint_raw(self):
         with open(self.SYSFS_PID_SETPOINT, "r") as f:
+            return int(f.read())
+
+    def set_pid_setpoint_current(self, current):
+        self.set_pid_setpoint_raw(self.adc_voltage2adc_raw(self.tip_current2adc_voltage(current)))
+
+    def get_pid_setpoint_current(self):
+        return self.adc_voltage2tip_current(self.adc_raw2adc_voltage(self.get_pid_setpoint_raw()))
+
+    def set_pid_p(self, kp):
+        with open(self.SYSFS_PID_KP, "r+") as f:
+            f.write(str(int(kp)))
+
+    def get_pid_p(self):
+        with open(self.SYSFS_PID_KP, "r") as f:
+            return int(f.read())
+
+    def set_pid_i(self, ki):
+        with open(self.SYSFS_PID_KI, "r+") as f:
+            f.write(str(int(ki)))
+
+    def get_pid_i(self):
+        with open(self.SYSFS_PID_KI, "r") as f:
+            return int(f.read())
+
+    def set_pid_d(self, kd):
+        with open(self.SYSFS_PID_KD, "r+") as f:
+            f.write(str(int(kd)))
+
+    def get_pid_d(self):
+        with open(self.SYSFS_PID_KD, "r") as f:
             return int(f.read())
 
     def set_dac_x(self, dac_value):
         with open(self.SYSFS_DAC_X, "r+") as f:
-            f.write(str(dac_value))
+            f.write(str(int(dac_value)))
 
     def get_dac_x(self):
         with open(self.SYSFS_DAC_X, "r") as f:
@@ -66,7 +111,7 @@ class STM:
 
     def set_dac_y(self, dac_value):
         with open(self.SYSFS_DAC_Y, "r+") as f:
-            f.write(str(dac_value))
+            f.write(str(int(dac_value)))
 
     def get_dac_y(self):
         with open(self.SYSFS_DAC_Y, "r") as f:
@@ -74,7 +119,7 @@ class STM:
 
     def set_dac_z(self, dac_value):
         with open(self.SYSFS_DAC_Z, "r+") as f:
-            f.write(str(dac_value))
+            f.write(str(int(dac_value)))
 
     def get_dac_z(self):
         with open(self.SYSFS_DAC_Z, "r") as f:
@@ -87,7 +132,7 @@ class STM:
 
     def get_scan_enable(self):
         with open(self.SYSFS_SCAN_ENABLE, "r") as f:
-            return bool(f.read())
+            return bool(int(f.read()))
 
     def set_pid_enable(self, enable):
         assert enable in [0, 1, False, True]
@@ -96,11 +141,11 @@ class STM:
 
     def get_pid_enable(self):
         with open(self.SYSFS_PID_ENABLE, "r") as f:
-            return bool(f.read())
+            return bool(int(f.read()))
 
     def set_pattern_buffer_size(self, size):
         with open(self.SYSFS_PATTERN_BUFFER_SIZE, "r+") as f:
-            f.write(str(size))
+            f.write(str(int(size)))
 
     def get_pattern_buffer_size(self):
         with open(self.SYSFS_PATTERN_BUFFER_SIZE, "r") as f:
@@ -112,7 +157,7 @@ class STM:
 
     def set_bias_voltage(self, voltage):
         with open(self.SYSFS_BIAS_VOLTAGE, "r+") as f:
-            f.write(str(voltage))
+            f.write(str(int(voltage)))
 
     def get_bias_voltage(self):
         with open(self.SYSFS_BIAS_VOLTAGE, "r") as f:
@@ -121,3 +166,9 @@ class STM:
     def write_pattern(self, pattern):
         self.dev_file.write(pattern)
         self.dev_file.flush()
+
+    def get_supply_temp(self):
+        return self.lm75_supply.get_temp()
+
+    def get_mainboard_temp(self):
+        return self.lm75_mainboard.get_temp()
