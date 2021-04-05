@@ -6,6 +6,8 @@ const initialState = {
   monitorInterval: 5,
   monitorMemory: 100,
   temperatureLog: [],
+  mainboardTemperature: 0,
+  supplyTemperature: 0,
   logMessages: []
 }
 
@@ -28,6 +30,8 @@ const reducer = (state = initialState, action) =>
           draft.temperatureLog.shift()
         }
         draft.temperatureLog.push( {time: action.time, mainboard: action.mainboard, supply: action.supply} )
+        draft.mainboardTemperature = action.mainboard
+        draft.supplyTemperature = action.supply
         break
       case ADD_LOG_MESSAGE:
         draft.logMessages.push(action.log)

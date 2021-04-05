@@ -11,6 +11,14 @@ function Topbar(props) {
       <Menu.Item header>
         STM Control
       </Menu.Item>
+      {!props.connected &&
+        <Menu.Item>
+          <Label color='red'>
+           <Icon name='circle notch' loading />
+            Not connected
+          </Label>
+        </Menu.Item>
+      }
 
       <Menu.Menu position='right'>
         <Menu.Item>
@@ -52,7 +60,8 @@ Topbar.propTypes = {
   tunneling: PropTypes.bool,
   pid: PropTypes.bool,
   scan: PropTypes.bool,
-  tipCurrent: PropTypes.number
+  tipCurrent: PropTypes.number,
+  connected: PropTypes.bool
 };
 
 export default Topbar;

@@ -33,7 +33,7 @@ function DashboardCard(props) {
           </Menu.Item>
         </Menu.Menu>
       </Menu>
-      <GrowingSegment attached="bottom">
+      <GrowingSegment attached="bottom" loading={props.loading || false}>
         {props.children}
       </GrowingSegment>
     </DashboardCardWrapper>
@@ -41,7 +41,8 @@ function DashboardCard(props) {
 }
 
 DashboardCard.propTypes = {
-  title: PropTypes.string
+  title: PropTypes.string,
+  loading: PropTypes.bool
 };
 
 export default DashboardCard;

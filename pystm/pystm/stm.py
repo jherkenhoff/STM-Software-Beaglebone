@@ -23,8 +23,18 @@ class STM:
     SYSFS_STEPPER_STEPS       = join(SYSFS_BASE_PATH, "stepper_steps")
 
     ADC_V_REFBUF = 4.096 # Voltage on ADC Refbuf pin
-    ADC_RES      = 18    # Resolution of ADC
+    ADC_BITS     = 18    # Resolution of ADC
     R_AMP        = 100e6 # Value of resistor in transimpedance amplifier
+
+    DAC_REF_P    = 10
+    DAC_REF_N    = -10
+    DAC_BITS     = 18
+
+    STEPPER_U_STEPS = 16
+    STEPPER_GEAR_RATIO = 26 + 103/121
+    STEPPER_STEP_ANGLE = 1.8 # in deg
+    STEPPER_SCREW_PITCH = 0.25e-3 # in m (= 0.25 mm)
+    STEPPER_LEVER_RATIO = 2.5/51.5 # Tip Lift Distance / Screw Lift Distance
 
     def __init__(self, dev_filepath = DEV_FILEPATH, sysfs_dir = SYSFS_BASE_PATH, i2c_bus = 1):
         self.dev_file = open(dev_filepath, "wb", )
@@ -46,10 +56,10 @@ class STM:
             return int(f.read())
 
     def adc_raw2adc_voltage(self, adc_raw):
-        return adc_raw * self.ADC_V_REFBUF / 2**self.ADC_RES
+        return adc_raw * self.ADC_V_REFBUF / 2**self.ADC_BITS
 
     def adc_voltage2adc_raw(self, adc_voltage):
-        return adc_voltage / self.ADC_V_REFBUF * 2**self.ADC_RES
+        return adc_voltage / self.ADC_V_REFBUF * 2**self.ADC_BITS
 
     def get_adc_voltage(self):
         return self.adc_raw2adc_voltage(self.get_adc_raw_value())
@@ -156,13 +166,25 @@ class STM:
         with open(self.SYSFS_PATTERN_BUFFER_USED, "r") as f:
             return int(f.read())
 
-    def set_bias_voltage(self, voltage):
+    def set_dac_bias_raw(self, raw):
         with open(self.SYSFS_BIAS_VOLTAGE, "r+") as f:
-            f.write(str(int(voltage)))
+            f.write(str(int(raw)))
 
-    def get_bias_voltage(self):
+    def get_dac_bias_raw(self):
         with open(self.SYSFS_BIAS_VOLTAGE, "r") as f:
             return int(f.read())
+
+    def dac_raw2dac_voltage(self, raw):
+        return (self.DAC_REF_P - self.DAC_REF_N) * raw / (2**self.DAC_BITS - 1)
+
+    def dac_voltage2dac_raw(self, voltage):
+        return voltage * (2**self.DAC_BITS - 1) / (self.DAC_REF_P - self.DAC_REF_N)
+
+    def set_dac_bias_voltage(self, voltage):
+        self.set_dac_bias_raw(self.dac_voltage2dac_raw(voltage))
+
+    def get_dac_bias_voltage(self):
+        return self.dac_raw2dac_voltage(self.get_dac_bias_raw())
 
     def write_pattern(self, pattern):
         self.dev_file.write(pattern)
@@ -177,6 +199,17 @@ class STM:
     def move_stepper(self, steps):
         with open(self.SYSFS_STEPPER_STEPS, "r+") as f:
             f.write(str(int(steps)))
+
+    def angle2steps(self, angle):
+        return angle/self.STEPPER_STEP_ANGLE * self.STEPPER_U_STEPS * self.STEPPER_GEAR_RATIO
+
+    def tip_movement2stepper_angle(self, distance):
+        # distance in m
+        return distance/self.STEPPER_LEVER_RATIO / self.STEPPER_SCREW_PITCH * 360
+
+    def move_stepper_tip_distance(self, distance):
+        self.move_stepper(self.angle2steps(self.tip_movement2stepper_angle(distance)))
+
 
     def stepper_move_finished(self):
         with open(self.SYSFS_STEPPER_STEPS, "r") as f:

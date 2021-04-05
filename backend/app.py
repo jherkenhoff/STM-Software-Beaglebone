@@ -63,6 +63,7 @@ def send_full_update(emit):
     emit("update_x", stm.get_dac_x())
     emit("update_y", stm.get_dac_y())
     emit("update_z", stm.get_dac_z())
+    emit("update_bias_voltage", stm.get_dac_bias_voltage())
 
 @socketio.on("connect")
 def test_connect():
@@ -123,8 +124,13 @@ def set_z(value):
     emit("update_z", stm.get_dac_z())
 
 @socketio.on("move_stepper")
-def move_stepper(steps):
-    stm.move_stepper(steps)
+def move_stepper(distance):
+    stm.move_stepper_tip_distance(distance)
+
+@socketio.on("set_bias_voltage")
+def set_bias_voltage(value):
+    stm.set_dac_bias_voltage(value)
+    emit("update_bias_voltage", stm.get_dac_bias_voltage())
 
 stm = STM()
 

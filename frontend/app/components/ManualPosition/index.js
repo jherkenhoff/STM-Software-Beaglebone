@@ -2,29 +2,39 @@
 import React from 'react';
 import PropTypes from "prop-types";
 import styled from 'styled-components';
-import { List, Transition, Header, Table, Image, Form } from 'semantic-ui-react'
+import { Input, Header, Table, Image, Form, Label, Icon } from 'semantic-ui-react'
 
 
 function ManualPosition(props) {
 
   return (
     <Form>
-      <Form.Group widths='equal'>
-        <Form.Field>
-          <label>X</label>
-          <input type="number" value={props.x} onChange={(e) => props.setX(parseFloat(e.target.value))} />
-        </Form.Field>
+      <Form.Input fluid labelPosition="right" type="number" onChange={(e) => props.setX(parseFloat(e.target.value))} >
+          <Label>X</Label>
+          <input type="number"/>
+          <Label>
+            <Icon name="caret right" />
+            {(props.x).toFixed(2)}
+          </Label>
+      </Form.Input>
+      <Form.Input fluid labelPosition="right" type="number" onChange={(e) => props.setY(parseFloat(e.target.value))} >
+          <Label>Y</Label>
+          <input type="number"/>
+          <Label>
+            <Icon name="caret right" />
+            {(props.y).toFixed(2)}
+          </Label>
+      </Form.Input>
 
-        <Form.Field>
-          <label>Y</label>
-          <input type="number" value={props.y} onChange={(e) => props.setY(parseFloat(e.target.value))} />
-        </Form.Field>
+      <Form.Input fluid labelPosition="right" type="number" onChange={(e) => props.setZ(parseFloat(e.target.value))} >
+          <Label>Z</Label>
+          <input disabled={props.pidEnabled} type="number"/>
+          <Label>
+            <Icon name="caret right" />
+            {(props.z).toFixed(2)}
+          </Label>
+      </Form.Input>
 
-        <Form.Field>
-          <label>Z</label>
-          <input type="number" disabled={props.pidEnabled} value={props.z} onChange={(e) => props.setZ(parseFloat(e.target.value))} />
-        </Form.Field>
-      </Form.Group>
     </Form>
   );
 }

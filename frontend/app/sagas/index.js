@@ -12,6 +12,7 @@ import {
   SET_Y,
   SET_Z,
   MOVE_STEPPER,
+  SET_BIAS_VOLTAGE,
   socketConnectionChanged,
   pidEnableChanged,
   tipMonitorUpdate,
@@ -25,6 +26,7 @@ import {
   updateX,
   updateY,
   updateZ,
+  updateBiasVoltage,
   addLogMessage,
   addLocalLogMessage,
 } from 'actions'
@@ -171,7 +173,14 @@ function* handleSetZ(socket) {
 function* handleMoveStepper(socket) {
   while (true) {
     let action = yield take(MOVE_STEPPER)
-    yield socket.emit("move_stepper", action.steps)
+    yield socket.emit("move_stepper", action.distance)
+  }
+}
+
+function* handleSetBiasVoltage(socket) {
+  while (true) {
+    let action = yield take(SET_BIAS_VOLTAGE)
+    yield socket.emit("set_bias_voltage", action.voltage)
   }
 }
 
@@ -211,6 +220,10 @@ function* handleUpdateZ(value) {
   yield put(updateZ(value))
 }
 
+function* handleUpdateBiasVoltage(value) {
+  yield put(updateBiasVoltage(value))
+}
+
 function* handleLog(entry) {
   yield put(addLogMessage(entry))
 }
@@ -229,6 +242,7 @@ export function* rootSaga() {
   const xChannel = yield call(createSocketChannel, socket, "update_x")
   const yChannel = yield call(createSocketChannel, socket, "update_y")
   const zChannel = yield call(createSocketChannel, socket, "update_z")
+  const biasVoltageChannel = yield call(createSocketChannel, socket, "update_bias_voltage")
   const logChannel = yield call(createSocketChannel, socket, "log")
 
   yield takeEvery(socketMonitorChannel, handleSocketChanged)
@@ -243,6 +257,7 @@ export function* rootSaga() {
   yield takeEvery(xChannel, handleUpdateX)
   yield takeEvery(yChannel, handleUpdateY)
   yield takeEvery(zChannel, handleUpdateZ)
+  yield takeEvery(biasVoltageChannel, handleUpdateBiasVoltage)
   yield takeEvery(logChannel, handleLog)
   yield fork(handleMonitorIntervalChanges, socket)
   yield fork(handlePidEnableToggles, socket)
@@ -254,4 +269,5 @@ export function* rootSaga() {
   yield fork(handleSetY, socket)
   yield fork(handleSetZ, socket)
   yield fork(handleMoveStepper, socket)
+  yield fork(handleSetBiasVoltage, socket)
 }

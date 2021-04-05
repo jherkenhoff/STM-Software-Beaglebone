@@ -8,7 +8,13 @@ import Topbar from 'components/Topbar';
 
 function TopbarContainer(props) {
   return (
-    <Topbar tunneling={props.tunneling} pid={props.pid} scan={props.scan} tipCurrent={props.tipCurrent}/>
+    <Topbar
+      tunneling={props.tunneling}
+      pid={props.pid}
+      scan={props.scan}
+      tipCurrent={props.tipCurrent}
+      connected={props.connected}
+    />
   );
 }
 
@@ -22,7 +28,8 @@ function mapStateToProps(state) {
     tunneling: true,
     pid: state.pid.enabled,
     scan: false,
-    tipCurrent: tipCurrent
+    tipCurrent: tipCurrent,
+    connected: state.monitor.connection
   }
 }
 

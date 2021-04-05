@@ -10,11 +10,13 @@ import monitor from './monitor'
 import pid from './pid'
 import scan from './scan'
 import tipMonitor from './tipMonitor'
+import bias from './bias'
 
 export default combineReducers({
     router: connectRouter(history),
     monitor,
     pid,
     scan,
-    tipMonitor
+    tipMonitor,
+    bias
   });

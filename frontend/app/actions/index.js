@@ -33,6 +33,9 @@ export const UPDATE_Z = "UPDATE_Z"
 
 export const MOVE_STEPPER = "MOVE_STEPPER"
 
+export const SET_BIAS_VOLTAGE = "SET_BIAS_VOLTAGE"
+export const UPDATE_BIAS_VOLTAGE = "UPDATE_BIAS_VOLTAGE"
+
 export function socketConnectionChanged(state) {
   return {type: SOCKET_CONNECTION_CHANGED, state}
 }
@@ -133,6 +136,14 @@ export function addLocalLogMessage(severity, msg) {
     return {type: ADD_LOG_MESSAGE, log: {time: Date.now()/1000, severity, msg}}
 }
 
-export function moveStepper(steps) {
-    return {type: MOVE_STEPPER, steps}
+export function moveStepper(distance) {
+    return {type: MOVE_STEPPER, distance}
+}
+
+export function setBiasVoltage(voltage) {
+    return {type: SET_BIAS_VOLTAGE, voltage}
+}
+
+export function updateBiasVoltage(voltage) {
+    return {type: UPDATE_BIAS_VOLTAGE, voltage}
 }

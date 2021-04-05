@@ -25,7 +25,7 @@ function mapStateToProps(state) {
 
 function mapDispatchToProps(dispatch) {
   return {
-    moveStepper: (steps) => dispatch(moveStepper(steps)),
+    moveStepper: (distance) => dispatch(moveStepper(distance)),
   };
 }
 

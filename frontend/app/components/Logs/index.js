@@ -24,7 +24,7 @@ function Logs(props) {
       as={List}
       duration={200}
       divided
-      animation="fly up"
+      animation="fade up"
       verticalAlign='middle'
     >;
 
