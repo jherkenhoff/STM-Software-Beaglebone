@@ -1,0 +1,9 @@
+[Unit]
+Description=Setup Pins for Scanning Tunneling Microscope (STM)
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /usr/local/bin/stm-config-pins
+
+[Install]
+WantedBy=multi-user.target

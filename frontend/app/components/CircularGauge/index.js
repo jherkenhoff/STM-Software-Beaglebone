@@ -12,7 +12,14 @@ function CircularGauge(props) {
   const options = {
     chart: {
       type: 'radialBar',
-      offsetY: -22
+      offsetY: -22,
+      animations: {
+        enabled: false,
+        dynamicAnimation: {
+            enabled: false,
+            speed: 0
+        }
+      }
     },
     plotOptions: {
       radialBar: {

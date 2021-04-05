@@ -12,6 +12,8 @@ apt install linux-headers-$(uname -r) # Kernel headers are required for driver c
 apt install cython3
 apt install python-numpy
 
+pip3 install wheel
+
 # Configure and start FTP service
 patch /etc/vsftpd.conf < ${PATCH_DIR}/vsftpd.patch
 systemctl enable vsftpd
@@ -41,7 +43,17 @@ install_udev_rules() {
 create_stm_group
 install_udev_rules
 
-pip3 install wheel
+install_systemd_services() {
+	echo "Installing systemd services"
+	cp -v "${DIR}/scripts/stm-config-pins.sh" "/usr/local/bin/stm-config-pins.sh"
+	cp -v "${DIR}/scripts/stm-config-pins.service" "/etc/systemd/system/stm-config-pins.service"
+	chown root:stm "/usr/local/bin/stm-config-pins.sh"
+	chmod +x "/usr/local/bin/stm-config-pins.sh"
+	systemctl enable stm-config-pins.service
+	systemctl start stm-config-pins.service
+}
+
+install_systemd_services()
 
 pushd pystm/
 pip3 install .
