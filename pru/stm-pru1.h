@@ -15,20 +15,24 @@ struct arm_pru1_share {
    uint32_t magic;
 
    uint32_t scan_enable;
-   uint32_t pid_enable;
 
+   uint32_t pid_enable;
+   uint32_t pid_steps;
    int32_t pid_setpoint;
    int32_t pid_kp;
    int32_t pid_ki;
    int32_t pid_kd;
 
-   CircularBufferContext pattern_buffer_ctx;
-   void *pattern_buffer;
-
    int32_t dac_x;
    int32_t dac_y;
    int32_t dac_z;
    int32_t dac_bias;
+
+   uint32_t stepper_steps;
+   uint32_t stepper_dir;
+
+   CircularBufferContext pattern_buffer_ctx;
+   void *pattern_buffer;
 };
 
 void set_scan_enabled(volatile struct arm_pru1_share *share, bool enable) {

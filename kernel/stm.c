@@ -204,6 +204,51 @@ static ssize_t pid_setpoint_show(struct device *dev, struct device_attribute *at
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->pid_setpoint);
 }
 
+static ssize_t pid_kp_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t pid_kp;
+
+	if (kstrtoint(buf, 10, &pid_kp))
+		return -EINVAL;
+	stmdev->arm_pru1_share->pid_kp = pid_kp;
+	return count;
+}
+
+static ssize_t pid_kp_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->pid_kp);
+}
+
+static ssize_t pid_ki_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t pid_ki;
+
+	if (kstrtoint(buf, 10, &pid_ki))
+		return -EINVAL;
+	stmdev->arm_pru1_share->pid_ki = pid_ki;
+	return count;
+}
+
+static ssize_t pid_ki_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->pid_ki);
+}
+
+static ssize_t pid_kd_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t pid_kd;
+
+	if (kstrtoint(buf, 10, &pid_kd))
+		return -EINVAL;
+	stmdev->arm_pru1_share->pid_kd = pid_kd;
+	return count;
+}
+
+static ssize_t pid_kd_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->pid_kd);
+}
+
 static ssize_t dac_x_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
 	int32_t dac_value;
@@ -245,7 +290,7 @@ static ssize_t dac_z_store(struct device *dev, struct device_attribute *attr, co
 	int32_t dac_value;
 
 	if (is_pid_enabled(stmdev->arm_pru1_share))
-	  return -EBUSY; // We cannot manually set the dac values while pid loop is running
+	    return -EBUSY; // We cannot manually set the dac values while pid loop is running
 
 	if (kstrtoint(buf, 10, &dac_value))
 		return -EINVAL;
@@ -361,10 +406,41 @@ static ssize_t bias_voltage_show(struct device *dev, struct device_attribute *at
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_bias);
 }
 
+static ssize_t stepper_dir_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t dir;
+	if (kstrtoint(buf, 10, &dir))
+		return -EINVAL;
+	stmdev->arm_pru1_share->stepper_dir = dir;
+	return count;
+}
+
+static ssize_t stepper_dir_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->stepper_dir);
+}
+
+static ssize_t stepper_steps_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t steps;
+	if (kstrtoint(buf, 10, &steps))
+		return -EINVAL;
+	stmdev->arm_pru1_share->stepper_steps = steps;
+	return count;
+}
+
+static ssize_t stepper_steps_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->stepper_steps);
+}
+
 // Everyone is allowed to read (0444), but only owner and group are allowed to write (0664)
 static DEVICE_ATTR(adc_averages, 0664, adc_averages_show, adc_averages_store);
 static DEVICE_ATTR(adc_value, 0444, adc_value_show, NULL);
 static DEVICE_ATTR(pid_setpoint, 0664, pid_setpoint_show, pid_setpoint_store);
+static DEVICE_ATTR(pid_kp, 0664, pid_kp_show, pid_kp_store);
+static DEVICE_ATTR(pid_ki, 0664, pid_ki_show, pid_ki_store);
+static DEVICE_ATTR(pid_kd, 0664, pid_kd_show, pid_kd_store);
 static DEVICE_ATTR(dac_x, 0664, dac_x_show, dac_x_store);
 static DEVICE_ATTR(dac_y, 0664, dac_y_show, dac_y_store);
 static DEVICE_ATTR(dac_z, 0664, dac_z_show, dac_z_store);
@@ -373,11 +449,16 @@ static DEVICE_ATTR(pid_enable, 0664, pid_enable_show, pid_enable_store);
 static DEVICE_ATTR(pattern_buffer_size, 0664, pattern_buffer_size_show, pattern_buffer_size_store);
 static DEVICE_ATTR(pattern_buffer_used, 0444, pattern_buffer_used_show, NULL);
 static DEVICE_ATTR(bias_voltage, 0664, bias_voltage_show, bias_voltage_store);
+static DEVICE_ATTR(stepper_dir, 0664, stepper_dir_show, stepper_dir_store);
+static DEVICE_ATTR(stepper_steps, 0664, stepper_steps_show, stepper_steps_store);
 
 static struct attribute *stm_attributes[] = {
 	&dev_attr_adc_averages.attr,
 	&dev_attr_adc_value.attr,
 	&dev_attr_pid_setpoint.attr,
+	&dev_attr_pid_kp.attr,
+	&dev_attr_pid_ki.attr,
+	&dev_attr_pid_kd.attr,
 	&dev_attr_dac_x.attr,
 	&dev_attr_dac_y.attr,
 	&dev_attr_dac_z.attr,
@@ -386,6 +467,8 @@ static struct attribute *stm_attributes[] = {
 	&dev_attr_pattern_buffer_size.attr,
 	&dev_attr_pattern_buffer_used.attr,
 	&dev_attr_bias_voltage.attr,
+	&dev_attr_stepper_dir.attr,
+	&dev_attr_stepper_steps.attr,
 	NULL
 };
 

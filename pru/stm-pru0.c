@@ -15,10 +15,13 @@ ADC
 #include "resource_table_0.h"
 #include "pru_defs.h"
 #include "stm-pru0.h"
+#include "pru-pru-share.h"
 
 /* Structure describing the shared context structure shared with the ARM host.
  * Compiler attributes place this at 0x0000 */
-struct arm_pru0_share arm_share __attribute__((location(0))) = {0};
+volatile struct arm_pru0_share arm_share __attribute__((location(0))) = {0};
+
+volatile struct pru_pru_share *pru_pru_share = (struct pru_pru_share *) 0x00010000;
 
 void adc_init() {
 	SET_PIN(PIN_ADC_CLK);
@@ -82,9 +85,11 @@ void main(void) {
 
 	adc_init();
 
+	setup_pru_pru_share(pru_pru_share);
+
 	while (1) {
 		adc_value = get_adc_average(arm_share.adc_averages);
-
+		update_pru_pru_adc_value(pru_pru_share, adc_value);
 		arm_share.adc_value = adc_value;
 	}
 }

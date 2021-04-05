@@ -15,10 +15,13 @@ DAC
 #include "resource_table_1.h"
 #include "pru_defs.h"
 #include "stm-pru1.h"
+#include "pru-pru-share.h"
 
 /* Structure describing the shared context structure shared with the ARM host.
  * Compiler attributes place this at 0x0000 */
 volatile struct arm_pru1_share arm_share __attribute__((location(0))) = {0};
+
+volatile struct pru_pru_share *pru_pru_share = (struct pru_pru_share *) 0x00010000;
 
 void dac_write(uint8_t addr, uint32_t value, uint32_t cs_pin) {
 	uint32_t word = (addr<<20) | value;
@@ -53,6 +56,13 @@ void dac_set_value(int32_t value, uint32_t cs_pin) {
 	dac_write(0x01, word_value, cs_pin);
 }
 
+void update_dacs() {
+	__delay_cycles(4);
+	CLR_PIN(PIN_DAC_LDAC);
+	__delay_cycles(4);
+	SET_PIN(PIN_DAC_LDAC);
+}
+
 void init_dacs() {
 	// Init DAC Pins
 	CLR_PIN(PIN_DAC_CLK);
@@ -61,7 +71,6 @@ void init_dacs() {
 	SET_PIN(PIN_DAC_CS_Y);
 	SET_PIN(PIN_DAC_CS_Z);
 	SET_PIN(PIN_DAC_CS_BIAS);
-
 
 	// Initialize all DAC values to 0:
 	dac_set_value(0, PIN_DAC_CS_X);
@@ -76,19 +85,54 @@ void init_dacs() {
 	dac_write(0x02, val, PIN_DAC_CS_Y);
 	dac_write(0x02, val, PIN_DAC_CS_Z);
 	dac_write(0x02, val, PIN_DAC_CS_BIAS);
+
+	update_dacs();
 }
 
-void update_dacs() {
-	__delay_cycles(4);
-	CLR_PIN(PIN_DAC_LDAC);
-	__delay_cycles(4);
-	SET_PIN(PIN_DAC_LDAC);
+int32_t calc_pid(int32_t error, int32_t k_p, int32_t k_i) {
+	static int64_t i_term = 0;
+	int64_t p_term;
+	int32_t dt = 1;
+
+	p_term = (int64_t)k_p * (int64_t)error;
+	i_term += (int64_t)k_i * (int64_t)error * (int64_t)dt;
+
+    return (int32_t)(( (p_term + i_term) >> 32 ) & 0xFFFFFFFF);
+}
+
+
+void move_stepper(uint32_t steps, uint32_t direction) {
+		size_t i;
+
+		if (direction == 0)
+			  CLR_PIN(PIN_STEPPER_DIR);
+		else
+		    SET_PIN(PIN_STEPPER_DIR);
+
+		CLR_PIN(PIN_STEPPER_EN);
+		__delay_cycles(10000);
+		for (i = 0; i < steps; i++) {
+			  SET_PIN(PIN_STEPPER_STEP);
+				__delay_cycles(10000);
+				CLR_PIN(PIN_STEPPER_STEP);
+				__delay_cycles(10000);
+		}
+		__delay_cycles(10000);
+		SET_PIN(PIN_STEPPER_EN);
 }
 
 void main(void) {
 	struct scan_point point;
+	uint32_t pid_step;
+	int32_t adc_value;
 
 	arm_share.magic = ARM_PRU1_SHARE_MAGIC;
+	arm_share.pid_steps = 1;
+	arm_share.dac_x = 0;
+	arm_share.dac_y = 0;
+	arm_share.dac_z = 0;
+	arm_share.dac_bias = 0;
+	arm_share.stepper_steps = 0;
 
 	/* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
 	CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
@@ -96,21 +140,36 @@ void main(void) {
 	init_dacs();
 
 	while (1) {
+		// Perform PID calculations and update Z DAC
+		if (arm_share.pid_enable) {
+			for (pid_step = 0; pid_step < arm_share.pid_steps; pid_step++) {
+				adc_value = get_new_adc_sample(pru_pru_share);
+				arm_share.dac_z = calc_pid(arm_share.pid_setpoint - adc_value, arm_share.pid_kp, arm_share.pid_ki);
+			}
+		}
+		dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
 
+		// Update XY DACs
 		if (arm_share.scan_enable) {
 			if (!CircularBufferPopFront(&arm_share.pattern_buffer_ctx, arm_share.pattern_buffer, &point)) {
-				arm_share.dac_x = point.x;
-				arm_share.dac_y = point.y;
 				dac_set_value(point.x, PIN_DAC_CS_X);
 				dac_set_value(point.y, PIN_DAC_CS_Y);
+				arm_share.dac_x = point.x;
+				arm_share.dac_y = point.y;
 			}
 		} else {
 			dac_set_value(arm_share.dac_x, PIN_DAC_CS_X);
 			dac_set_value(arm_share.dac_y, PIN_DAC_CS_Y);
 		}
+
 		dac_set_value(arm_share.dac_bias, PIN_DAC_CS_BIAS);
-		dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
 		update_dacs();
+
+		// Move stepper motor
+		if (arm_share.stepper_steps > 0) {
+				move_stepper(arm_share.stepper_steps, arm_share.stepper_dir);
+				arm_share.stepper_steps = 0;
+		}
 		__delay_cycles(1000000);
 	}
 }
