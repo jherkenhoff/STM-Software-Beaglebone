@@ -28,8 +28,7 @@ struct arm_pru1_share {
    int32_t dac_z;
    int32_t dac_bias;
 
-   uint32_t stepper_steps;
-   uint32_t stepper_dir;
+   int32_t stepper_steps;
 
    CircularBufferContext pattern_buffer_ctx;
    void *pattern_buffer;

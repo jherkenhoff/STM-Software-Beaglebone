@@ -11,6 +11,7 @@ import {
   SET_X,
   SET_Y,
   SET_Z,
+  MOVE_STEPPER,
   socketConnectionChanged,
   pidEnableChanged,
   tipMonitorUpdate,
@@ -167,6 +168,13 @@ function* handleSetZ(socket) {
   }
 }
 
+function* handleMoveStepper(socket) {
+  while (true) {
+    let action = yield take(MOVE_STEPPER)
+    yield socket.emit("move_stepper", action.steps)
+  }
+}
+
 function* handleUpdateMonitorInterval(interval) {
   yield put(updateMonitorInterval(interval))
 }
@@ -245,4 +253,5 @@ export function* rootSaga() {
   yield fork(handleSetX, socket)
   yield fork(handleSetY, socket)
   yield fork(handleSetZ, socket)
+  yield fork(handleMoveStepper, socket)
 }

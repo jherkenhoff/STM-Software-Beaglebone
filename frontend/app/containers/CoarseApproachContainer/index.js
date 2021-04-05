@@ -4,13 +4,15 @@ import { compose } from 'redux'
 import { connect } from 'react-redux'
 import PropTypes from "prop-types";
 
+import { moveStepper } from "actions";
+
 import DashboardCard from 'components/DashboardCard';
 import CoarseApproach from 'components/CoarseApproach';
 
 function CoarseApproachContainer(props) {
   return (
     <DashboardCard title="Coarse Approach">
-      <CoarseApproach />
+      <CoarseApproach moveStepper={props.moveStepper}/>
     </DashboardCard>
   );
 }
@@ -21,8 +23,15 @@ function mapStateToProps(state) {
   }
 }
 
+function mapDispatchToProps(dispatch) {
+  return {
+    moveStepper: (steps) => dispatch(moveStepper(steps)),
+  };
+}
+
 const withConnect = connect(
-  mapStateToProps
+  mapStateToProps,
+  mapDispatchToProps
 );
 
 export default compose(withConnect)(CoarseApproachContainer);

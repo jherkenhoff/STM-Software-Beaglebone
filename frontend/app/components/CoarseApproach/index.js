@@ -4,42 +4,35 @@ import PropTypes from "prop-types";
 import styled from 'styled-components';
 import { Button, Icon, Form } from 'semantic-ui-react'
 
+const options = [
+  { key: 's', text: 'Small', value: 100, description: "100"},
+  { key: 'm', text: 'Medium', value: 100, description: "1000"},
+  { key: 'l', text: 'Large', value: 100, description: "10000"},
+]
+
 function CoarseApproach(props) {
 
   return (
     <div>
 
       <Form>
-        <Form.Group widths='equal'>
-          <Form.Field>
-            <label>Step size</label>
-            <input type="number" value={props.P} onChange={(e) => props.onPChange(parseFloat(e.target.value))} />
-          </Form.Field>
-
-          <Form.Field>
-            <label>Speed</label>
-            <input type="number" value={props.I} onChange={(e) => props.onIChange(parseFloat(e.target.value))} />
-          </Form.Field>
-        </Form.Group>
+        <Form.Select
+          fluid
+          label='Step Size'
+          options={options}
+          placeholder='Step Size'
+        />
         <Button.Group fluid>
-          <Button labelPosition='left' icon='up arrow' content='Up' />
-          <Button labelPosition='right' icon='down arrow' content='Down' />
+          <Button labelPosition='left' icon='up arrow' content='Up' onClick={(e) => props.moveStepper(10000)}/>
+          <Button labelPosition='right' icon='down arrow' content='Down' onClick={(e) => props.moveStepper(-10000)} />
         </Button.Group>
       </Form>
     </div>
   );
 }
 
-
-// Up
-// Down
-// Speed
-// Step Size
-//
-// Start CoarseApproach
-// Stop Approach
-
 CoarseApproach.propTypes = {
+  moveStepper: PropTypes.func
 };
 
 export default CoarseApproach;

@@ -122,6 +122,10 @@ def set_z(value):
     stm.set_dac_z(value)
     emit("update_z", stm.get_dac_z())
 
+@socketio.on("move_stepper")
+def move_stepper(steps):
+    stm.move_stepper(steps)
+
 stm = STM()
 
 monitor_thread = MonitorThread(stm)

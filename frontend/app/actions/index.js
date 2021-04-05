@@ -31,6 +31,8 @@ export const UPDATE_X = "UPDATE_X"
 export const UPDATE_Y = "UPDATE_Y"
 export const UPDATE_Z = "UPDATE_Z"
 
+export const MOVE_STEPPER = "MOVE_STEPPER"
+
 export function socketConnectionChanged(state) {
   return {type: SOCKET_CONNECTION_CHANGED, state}
 }
@@ -129,4 +131,8 @@ export function updateZ(value) {
 
 export function addLocalLogMessage(severity, msg) {
     return {type: ADD_LOG_MESSAGE, log: {time: Date.now()/1000, severity, msg}}
+}
+
+export function moveStepper(steps) {
+    return {type: MOVE_STEPPER, steps}
 }

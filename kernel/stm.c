@@ -406,20 +406,6 @@ static ssize_t bias_voltage_show(struct device *dev, struct device_attribute *at
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->dac_bias);
 }
 
-static ssize_t stepper_dir_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
-	struct stm_dev *stmdev = dev_get_drvdata(dev);
-	int32_t dir;
-	if (kstrtoint(buf, 10, &dir))
-		return -EINVAL;
-	stmdev->arm_pru1_share->stepper_dir = dir;
-	return count;
-}
-
-static ssize_t stepper_dir_show(struct device *dev, struct device_attribute *attr, char *buf) {
-	struct stm_dev *stmdev = dev_get_drvdata(dev);
-	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->stepper_dir);
-}
-
 static ssize_t stepper_steps_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
 	struct stm_dev *stmdev = dev_get_drvdata(dev);
 	int32_t steps;
@@ -449,7 +435,6 @@ static DEVICE_ATTR(pid_enable, 0664, pid_enable_show, pid_enable_store);
 static DEVICE_ATTR(pattern_buffer_size, 0664, pattern_buffer_size_show, pattern_buffer_size_store);
 static DEVICE_ATTR(pattern_buffer_used, 0444, pattern_buffer_used_show, NULL);
 static DEVICE_ATTR(bias_voltage, 0664, bias_voltage_show, bias_voltage_store);
-static DEVICE_ATTR(stepper_dir, 0664, stepper_dir_show, stepper_dir_store);
 static DEVICE_ATTR(stepper_steps, 0664, stepper_steps_show, stepper_steps_store);
 
 static struct attribute *stm_attributes[] = {
@@ -467,7 +452,6 @@ static struct attribute *stm_attributes[] = {
 	&dev_attr_pattern_buffer_size.attr,
 	&dev_attr_pattern_buffer_used.attr,
 	&dev_attr_bias_voltage.attr,
-	&dev_attr_stepper_dir.attr,
 	&dev_attr_stepper_steps.attr,
 	NULL
 };

@@ -20,6 +20,7 @@ class STM:
     SYSFS_PATTERN_BUFFER_SIZE = join(SYSFS_BASE_PATH, "pattern_buffer_size")
     SYSFS_PATTERN_BUFFER_USED = join(SYSFS_BASE_PATH, "pattern_buffer_used")
     SYSFS_BIAS_VOLTAGE        = join(SYSFS_BASE_PATH, "bias_voltage")
+    SYSFS_STEPPER_STEPS       = join(SYSFS_BASE_PATH, "stepper_steps")
 
     ADC_V_REFBUF = 4.096 # Voltage on ADC Refbuf pin
     ADC_RES      = 18    # Resolution of ADC
@@ -172,3 +173,11 @@ class STM:
 
     def get_mainboard_temp(self):
         return self.lm75_mainboard.get_temp()
+
+    def move_stepper(self, steps):
+        with open(self.SYSFS_STEPPER_STEPS, "r+") as f:
+            f.write(str(int(steps)))
+
+    def stepper_move_finished(self):
+        with open(self.SYSFS_STEPPER_STEPS, "r") as f:
+            return int(f.read()) == 0

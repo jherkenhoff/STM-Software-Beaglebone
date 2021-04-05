@@ -167,7 +167,10 @@ void main(void) {
 
 		// Move stepper motor
 		if (arm_share.stepper_steps > 0) {
-				move_stepper(arm_share.stepper_steps, arm_share.stepper_dir);
+				move_stepper(arm_share.stepper_steps, 1);
+				arm_share.stepper_steps = 0;
+		} else if (arm_share.stepper_steps < 0) {
+				move_stepper(-arm_share.stepper_steps, 0);
 				arm_share.stepper_steps = 0;
 		}
 		__delay_cycles(1000000);
