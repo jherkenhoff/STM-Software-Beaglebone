@@ -1,6 +1,7 @@
 
 from os.path import join
 from .lm75 import LM75
+import numpy as np
 
 class STM:
     SYSFS_BASE_PATH = "/sys/devices/virtual/misc/stm"
@@ -26,8 +27,7 @@ class STM:
     ADC_BITS     = 18    # Resolution of ADC
     R_AMP        = 100e6 # Value of resistor in transimpedance amplifier
 
-    DAC_REF_P    = 10
-    DAC_REF_N    = -10
+    DAC_REF      = 10
     DAC_BITS     = 18
 
     STEPPER_U_STEPS = 16
@@ -120,6 +120,12 @@ class STM:
         with open(self.SYSFS_DAC_X, "r") as f:
             return int(f.read())
 
+    def set_dac_x_voltage(self, voltage):
+        self.set_dac_x(self.dac_voltage2dac_raw(voltage))
+
+    def get_dac_x_voltage(self):
+        return self.dac_raw2dac_voltage(self.get_dac_x())
+
     def set_dac_y(self, dac_value):
         with open(self.SYSFS_DAC_Y, "r+") as f:
             f.write(str(int(dac_value)))
@@ -128,6 +134,12 @@ class STM:
         with open(self.SYSFS_DAC_Y, "r") as f:
             return int(f.read())
 
+    def set_dac_y_voltage(self, voltage):
+        self.set_dac_y(self.dac_voltage2dac_raw(voltage))
+
+    def get_dac_y_voltage(self):
+        return self.dac_raw2dac_voltage(self.get_dac_y())
+
     def set_dac_z(self, dac_value):
         with open(self.SYSFS_DAC_Z, "r+") as f:
             f.write(str(int(dac_value)))
@@ -135,6 +147,12 @@ class STM:
     def get_dac_z(self):
         with open(self.SYSFS_DAC_Z, "r") as f:
             return int(f.read())
+
+    def set_dac_z_voltage(self, voltage):
+        self.set_dac_z(self.dac_voltage2dac_raw(voltage))
+
+    def get_dac_z_voltage(self):
+        return self.dac_raw2dac_voltage(self.get_dac_z())
 
     def set_scan_enable(self, enable):
         assert enable in [0, 1, False, True]
@@ -175,10 +193,10 @@ class STM:
             return int(f.read())
 
     def dac_raw2dac_voltage(self, raw):
-        return (self.DAC_REF_P - self.DAC_REF_N) * raw / (2**self.DAC_BITS - 1)
+        return (self.DAC_REF) * raw / (2**(self.DAC_BITS-1) - 1)
 
     def dac_voltage2dac_raw(self, voltage):
-        return voltage * (2**self.DAC_BITS - 1) / (self.DAC_REF_P - self.DAC_REF_N)
+        return voltage * (2**(self.DAC_BITS-1) - 1) / (self.DAC_REF)
 
     def set_dac_bias_voltage(self, voltage):
         self.set_dac_bias_raw(self.dac_voltage2dac_raw(voltage))
@@ -187,8 +205,17 @@ class STM:
         return self.dac_raw2dac_voltage(self.get_dac_bias_raw())
 
     def write_pattern(self, pattern):
-        self.dev_file.write(pattern)
+        x = pattern.x.clip(-self.DAC_REF, self.DAC_REF)
+        y = pattern.y.clip(-self.DAC_REF, self.DAC_REF)
+        raw_pattern = np.empty((len(pattern.x), 2), dtype="int32")
+        raw_pattern[:,0] = self.dac_voltage2dac_raw(x)
+        raw_pattern[:,1] = self.dac_voltage2dac_raw(y)
+
+        self.dev_file.write(raw_pattern)
         self.dev_file.flush()
+
+    def get_buffer_data(self, dtype="int32", word_width=18):
+        return pattern
 
     def get_supply_temp(self):
         return self.lm75_supply.get_temp()

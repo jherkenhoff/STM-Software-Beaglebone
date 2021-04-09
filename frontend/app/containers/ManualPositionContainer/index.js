@@ -11,7 +11,7 @@ import { setX, setY, setZ } from "actions";
 function ManualPositionContainer(props) {
   return (
     <DashboardCard title="Manual Positioning">
-      <ManualPosition x={props.x} y={props.y} z={props.z} setX={props.setX} setY={props.setY} setZ={props.setZ} pidEnabled={props.pidEnabled}/>
+      <ManualPosition x={props.x} y={props.y} z={props.z} setX={props.setX} setY={props.setY} setZ={props.setZ} pidEnabled={props.pidEnabled} scanEnabled={props.scanEnabled}/>
     </DashboardCard>
   );
 }
@@ -21,7 +21,8 @@ function mapStateToProps(state) {
     x: state.tipMonitor.x,
     y: state.tipMonitor.y,
     z: state.tipMonitor.z,
-    pidEnabled: state.pid.enabled
+    pidEnabled: state.pid.enabled,
+    scanEnabled: state.scan.enabled
   }
 }
 

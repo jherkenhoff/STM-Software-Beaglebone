@@ -6,13 +6,11 @@ class Pattern:
         self.x = x
         self.y = y
 
-    def get_buffer_data(self, dtype="int32", word_width=18):
-        x = self.x.clip(-0.5, 0.5)
-        y = self.y.clip(-0.5, 0.5)
-        pattern = np.empty((len(self.x), 2), dtype=dtype)
-        pattern[:,0] = (x*2) * (2**(word_width-1)-1)
-        pattern[:,1] = (y*2) * (2**(word_width-1)-1)
-        return pattern
+    def get_point_array(self):
+        points = []
+        for i in range(len(self.x)):
+            points.append((self.x[i], self.y[i]))
+        return points
 
     def translate(self, x, y):
         self.x = self.x + x

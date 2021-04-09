@@ -23,6 +23,8 @@ import DataViewContainer from 'containers/DataViewContainer';
 import ManualPositionContainer from 'containers/ManualPositionContainer';
 import CoarseApproachContainer from 'containers/CoarseApproachContainer';
 import BiasVoltageContainer from 'containers/BiasVoltageContainer';
+import ScanSetupContainer from 'containers/ScanSetupContainer';
+import ScanViewContainer from 'containers/ScanViewContainer';
 import styled from 'styled-components';
 
 import { Grid, Divider, Icon, Header, Segment } from 'semantic-ui-react'
@@ -32,17 +34,19 @@ const ResizeableGridLayout = WidthProvider(ResponsiveGridLayout);
 function Dashboard(props) {
   const layouts = {
     lg: [
-      {i: "tip-plot", x: 0, y:0, w: 7, h:3},
-      {i: "log", x: 7, y:0, w: 3, h:3},
-      {i: "env-plot", x: 0, y:2, w: 3, h:3},
-      {i: "current-gauge", x: 3, y:2, w: 1, h: 1, isResizable: false},
-      {i: "z-gauge", x: 4, y:2, w: 1, h: 1, isResizable: false},
-      {i: "mainboard-temperature-gauge", x: 3, y: 3, w: 1, h: 1, isResizable: false},
-      {i: "supply-temperature-gauge", x: 4, y: 3, w: 1, h: 1, isResizable: false},
-      {i: "coarse-approach", x: 5, y:2, w: 2, h:2},
-      {i: "pid-settings", x: 7, y:2, w: 3, h:2},
-      {i: "manual-position", x: 3, y:4, w: 2, h:2, minW:2, minH:2},
-      {i: "bias-voltage", x: 5, y:4, w: 2, h:1, minW: 2, maxH: 1},
+      {w: 5, h: 2, x: 0, y: 3, i: "env-plot"},
+      {w: 3, h: 3, x: 9, y: 0, i: "log"},
+      {w: 7, h: 3, x: 0, y: 0, i: "tip-plot"},
+      {w: 3, h: 2, x: 9, y: 3, i: "pid-settings"},
+      {w: 2, h: 2, x: 7, y: 3, i: "manual-position", minW: 2, minH: 2},
+      {w: 1, h: 1, x: 5, y: 3, i: "current-gauge", isResizable: false},
+      {w: 1, h: 1, x: 6, y: 3, i: "z-gauge", isResizable: false},
+      {w: 2, h: 2, x: 7, y: 1, i: "coarse-approach"},
+      {w: 1, h: 1, x: 7, y: 0, i: "mainboard-temperature-gauge", isResizable: false},
+      {w: 1, h: 1, x: 8, y: 0, i: "supply-temperature-gauge", isResizable: false},
+      {w: 2, h: 1, x: 5, y: 4, i: "bias-voltage", minW: 2, maxH: 1},
+      {w: 2, h: 5, x: 8, y: 4, i: "scan-setup", minW: 2, minH: 5},
+      {w: 5, h: 4, x: 8, y: 4, i: "scan-view", minW: 2, minH: 2},
     ],
     md: [
       {i: "tip-plot", x: 0, y:0, w: 7, h:3},
@@ -54,8 +58,10 @@ function Dashboard(props) {
       {i: "supply-temperature-gauge", x: 4, y: 3, w: 1, h: 1, isResizable: false},
       {i: "coarse-approach", x: 5, y:2, w: 2, h:2},
       {i: "pid-settings", x: 7, y:2, w: 3, h:2},
-      {i: "manual-position", x: 3, y:4, w: 3, h: 2, minW:3, minH:2},
+      {i: "manual-position", x: 3, y:4, w: 2, h: 2, minW:2, minH:2},
       {i: "bias-voltage", x: 5, y:4, w: 2, h:1, minW: 2, maxH: 1},
+      {w: 2, h: 5, x: 8, y: 4, i: "scan-setup", minW: 2, minH: 5},
+      {w: 5, h: 4, x: 8, y: 4, i: "scan-view", minW: 2, minH: 2},
     ]
   };
 
@@ -100,6 +106,12 @@ function Dashboard(props) {
       </div>
       <div key="bias-voltage">
         <BiasVoltageContainer />
+      </div>
+      <div key="scan-setup">
+        <ScanSetupContainer />
+      </div>
+      <div key="scan-view">
+        <ScanViewContainer />
       </div>
     </ResizeableGridLayout>
   );

@@ -13,6 +13,8 @@ import {
   SET_Z,
   MOVE_STEPPER,
   SET_BIAS_VOLTAGE,
+  UPLOAD_SCAN_PATTERN,
+  SET_SCAN_ENABLED,
   socketConnectionChanged,
   pidEnableChanged,
   tipMonitorUpdate,
@@ -27,6 +29,10 @@ import {
   updateY,
   updateZ,
   updateBiasVoltage,
+  updatePatternOptions,
+  updatePatternPoints,
+  updateScanRange,
+  updateScanEnabled,
   addLogMessage,
   addLocalLogMessage,
 } from 'actions'
@@ -184,6 +190,27 @@ function* handleSetBiasVoltage(socket) {
   }
 }
 
+function* handleUploadScanPattern(socket) {
+  while (true) {
+    let action = yield take(UPLOAD_SCAN_PATTERN)
+    yield socket.emit("upload_scan_pattern", {
+      pattern: action.pattern,
+      parameters: action.parameters,
+      position: action.position,
+      size: action.size,
+      rotation: action.rotation
+    })
+  }
+}
+
+function* handleSetScanEnabled(socket) {
+  while (true) {
+    let action = yield take(SET_SCAN_ENABLED)
+    yield socket.emit("enable_scan", action.enabled)
+  }
+}
+
+
 function* handleUpdateMonitorInterval(interval) {
   yield put(updateMonitorInterval(interval))
 }
@@ -224,6 +251,22 @@ function* handleUpdateBiasVoltage(value) {
   yield put(updateBiasVoltage(value))
 }
 
+function* handleUpdatePatternOptions(options) {
+  yield put(updatePatternOptions(options))
+}
+
+function* handleUpdatePatternPoints(points) {
+  yield put(updatePatternPoints(points))
+}
+
+function* handleUpdateScanRange(range) {
+  yield put(updateScanRange(range))
+}
+
+function* handleUpdateScanEnabled(enabled) {
+  yield put(updateScanEnabled(enabled))
+}
+
 function* handleLog(entry) {
   yield put(addLogMessage(entry))
 }
@@ -243,6 +286,10 @@ export function* rootSaga() {
   const yChannel = yield call(createSocketChannel, socket, "update_y")
   const zChannel = yield call(createSocketChannel, socket, "update_z")
   const biasVoltageChannel = yield call(createSocketChannel, socket, "update_bias_voltage")
+  const patternOptionsChannel = yield call(createSocketChannel, socket, "update_pattern_options")
+  const patternPointsChannel = yield call(createSocketChannel, socket, "update_pattern_points")
+  const scanRangeChannel = yield call(createSocketChannel, socket, "update_scan_range")
+  const scanEnabledChannel = yield call(createSocketChannel, socket, "update_scan_enabled")
   const logChannel = yield call(createSocketChannel, socket, "log")
 
   yield takeEvery(socketMonitorChannel, handleSocketChanged)
@@ -258,6 +305,10 @@ export function* rootSaga() {
   yield takeEvery(yChannel, handleUpdateY)
   yield takeEvery(zChannel, handleUpdateZ)
   yield takeEvery(biasVoltageChannel, handleUpdateBiasVoltage)
+  yield takeEvery(patternOptionsChannel, handleUpdatePatternOptions)
+  yield takeEvery(patternPointsChannel, handleUpdatePatternPoints)
+  yield takeEvery(scanRangeChannel, handleUpdateScanRange)
+  yield takeEvery(scanEnabledChannel, handleUpdateScanEnabled)
   yield takeEvery(logChannel, handleLog)
   yield fork(handleMonitorIntervalChanges, socket)
   yield fork(handlePidEnableToggles, socket)
@@ -270,4 +321,6 @@ export function* rootSaga() {
   yield fork(handleSetZ, socket)
   yield fork(handleMoveStepper, socket)
   yield fork(handleSetBiasVoltage, socket)
+  yield fork(handleUploadScanPattern, socket)
+  yield fork(handleSetScanEnabled, socket)
 }

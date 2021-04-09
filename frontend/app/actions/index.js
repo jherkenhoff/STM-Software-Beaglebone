@@ -36,6 +36,23 @@ export const MOVE_STEPPER = "MOVE_STEPPER"
 export const SET_BIAS_VOLTAGE = "SET_BIAS_VOLTAGE"
 export const UPDATE_BIAS_VOLTAGE = "UPDATE_BIAS_VOLTAGE"
 
+export const UPDATE_PATTERN_OPTIONS = "UPDATE_PATTERN_OPTIONS"
+export const SET_SCAN_PATTERN = "SET_SCAN_PATTERN"
+export const SET_SCAN_PATTERN_PARAMETERS = "SET_SCAN_PATTERN_PARAMETERS"
+export const UPLOAD_SCAN_PATTERN = "UPLOAD_SCAN_PATTERN"
+export const UPDATE_PATTERN_POINTS = "UPDATE_PATTERN_POINTS"
+
+
+export const SET_SCAN_BOUNDING_BOX_SIZE = "SET_SCAN_BOUNDING_BOX_SIZE"
+export const SET_SCAN_BOUNDING_BOX_POSITION = "SET_SCAN_BOUNDING_BOX_POSITION"
+export const SET_SCAN_BOUNDING_BOX_ROTATION = "SET_SCAN_BOUNDING_BOX_ROTATION"
+
+export const UPDATE_SCAN_RANGE = "UPDATE_SCAN_RANGE"
+
+export const UPDATE_SCAN_ENABLED = "UPDATE_SCAN_ENABLED"
+export const SET_SCAN_ENABLED = "SET_SCAN_ENABLED"
+
+
 export function socketConnectionChanged(state) {
   return {type: SOCKET_CONNECTION_CHANGED, state}
 }
@@ -146,4 +163,48 @@ export function setBiasVoltage(voltage) {
 
 export function updateBiasVoltage(voltage) {
     return {type: UPDATE_BIAS_VOLTAGE, voltage}
+}
+
+export function updatePatternOptions(options) {
+    return {type: UPDATE_PATTERN_OPTIONS, options}
+}
+
+export function updatePatternPoints(points) {
+    return {type: UPDATE_PATTERN_POINTS, points}
+}
+
+export function setScanPattern(pattern) {
+  return {type: SET_SCAN_PATTERN, pattern}
+}
+
+export function setScanBoundingBoxSize(size) {
+  return {type: SET_SCAN_BOUNDING_BOX_SIZE, size}
+}
+
+export function setScanBoundingBoxPosition(position) {
+  return {type: SET_SCAN_BOUNDING_BOX_POSITION, position}
+}
+
+export function setScanBoundingBoxRotation(rotation) {
+  return {type: SET_SCAN_BOUNDING_BOX_ROTATION, rotation}
+}
+
+export function setScanPatternParameters(parameters) {
+  return {type: SET_SCAN_PATTERN_PARAMETERS, parameters}
+}
+
+export function updateScanRange(range) {
+  return {type: UPDATE_SCAN_RANGE, range}
+}
+
+export function uploadScanPattern(pattern, parameters, position, size, rotation) {
+  return {type: UPLOAD_SCAN_PATTERN, pattern, parameters, position, size, rotation}
+}
+
+export function setScanEnabled(enabled) {
+  return {type: SET_SCAN_ENABLED, enabled}
+}
+
+export function updateScanEnabled(enabled) {
+  return {type: UPDATE_SCAN_ENABLED, enabled}
 }

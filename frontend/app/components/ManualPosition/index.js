@@ -11,7 +11,7 @@ function ManualPosition(props) {
     <Form>
       <Form.Input fluid labelPosition="right" type="number" onChange={(e) => props.setX(parseFloat(e.target.value))} >
           <Label>X</Label>
-          <input type="number"/>
+          <input disabled={props.scanEnabled} type="number"/>
           <Label>
             <Icon name="caret right" />
             {(props.x).toFixed(2)}
@@ -19,7 +19,7 @@ function ManualPosition(props) {
       </Form.Input>
       <Form.Input fluid labelPosition="right" type="number" onChange={(e) => props.setY(parseFloat(e.target.value))} >
           <Label>Y</Label>
-          <input type="number"/>
+          <input disabled={props.scanEnabled} type="number"/>
           <Label>
             <Icon name="caret right" />
             {(props.y).toFixed(2)}
@@ -46,7 +46,8 @@ ManualPosition.propTypes = {
   x: PropTypes.number,
   y: PropTypes.number,
   z: PropTypes.number,
-  pidEnabled: PropTypes.bool
+  pidEnabled: PropTypes.bool,
+  scanEnabled: PropTypes.bool,
 };
 
 export default ManualPosition;

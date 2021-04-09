@@ -1,11 +1,11 @@
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 
-from threading import Thread
+from threading import Thread, Event
 from time import sleep, time_ns, time
 
 from random import random
-from pystm import STM
+from pystm import STM, PatternGen
 
 
 class MonitorThread(Thread):
@@ -44,10 +44,77 @@ class TipMonitorThread(Thread):
             socketio.emit("tip_monitor_update", {
                 "time": time_ns(),
                 "current": stm.get_tip_current(),
-                "x": stm.get_dac_x(),
-                "y": stm.get_dac_y(),
-                "z": stm.get_dac_z(),
+                "x": stm.get_dac_x_voltage(),
+                "y": stm.get_dac_y_voltage(),
+                "z": stm.get_dac_z_voltage(),
                 }, broadcast=True)
+
+
+class ScanThread(Thread):
+    def __init__(self, stm):
+        Thread.__init__(self)
+        self.stm = stm
+        self.pattern = None
+        self.start_event = Event()
+
+    def set_pattern(self, pattern):
+        self.pattern = pattern
+
+    def start_scan(self):
+        self.start_event.set()
+
+    def run(self):
+        while (1):
+            self.start_event.wait()
+            self.start_event.clear()
+            print("Start scan")
+            stm.set_pattern_buffer_size(512)
+            stm.set_scan_enable(True)
+            stm.write_pattern(self.pattern)
+            while (stm.get_pattern_buffer_used() != 0):
+                sleep(0.1)
+            stm.set_scan_enable(False)
+            print("Scan finished")
+            socketio.emit("update_scan_enabled", stm.get_scan_enable(), broadcast=True)
+
+
+pattern_options = {
+    "triangle": {
+        "name": "Triangle",
+        "parameters": {
+            "n_lines": {"name": "N Lines", "type": "integer", "default": 10, "min": 1},
+            "n_linepoints": {"name": "N Linepoints", "type": "integer", "default": 10, "min": 1}
+        }
+    },
+    "sine": {
+        "name": "Sine",
+        "parameters": {
+            "periods": {"name": "Periods", "type": "integer", "default": 10, "min": 1},
+            "points_per_period": {"name": "Points per Period", "type": "integer", "default": 10, "min": 1}
+        }
+    },
+    "cosine": {
+        "name": "Cosine",
+        "parameters": {
+            "periods": {"name": "Periods", "type": "integer", "default": 10, "min": 1},
+            "points_per_period": {"name": "Points per Period", "type": "integer", "default": 10, "min": 1}
+        }
+    },
+    "spiral": {
+        "name": "Spiral",
+        "parameters": {
+            "turns": {"name": "Turns", "type": "integer", "default": 10, "min": 1},
+            "points_per_turn": {"name": "Points per Turn", "type": "integer", "default": 10, "min": 1}
+        }
+    },
+}
+
+pattern_factories = {
+    "triangle": PatternGen.triangle,
+    "sine": PatternGen.sine,
+    "cosine": PatternGen.cosine,
+    "spiral": PatternGen.spiral
+}
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret!"
@@ -60,15 +127,18 @@ def send_full_update(emit):
     emit("update_pid_i", stm.get_pid_i())
     emit("update_pid_d", stm.get_pid_d())
     emit("update_pid_setpoint", stm.get_pid_setpoint_current())
-    emit("update_x", stm.get_dac_x())
-    emit("update_y", stm.get_dac_y())
-    emit("update_z", stm.get_dac_z())
+    emit("update_x", stm.get_dac_x_voltage())
+    emit("update_y", stm.get_dac_y_voltage())
+    emit("update_z", stm.get_dac_z_voltage())
     emit("update_bias_voltage", stm.get_dac_bias_voltage())
+    emit("update_scan_enabled", stm.get_scan_enable())
 
 @socketio.on("connect")
 def test_connect():
     print("Client connected")
     send_full_update(emit)
+    emit("update_pattern_options", pattern_options)
+    emit("update_scan_range", {"x": 20, "y": 20})
 
 @socketio.on("disconnect")
 def test_disconnect():
@@ -110,18 +180,18 @@ def set_pid_setpoint(value):
 
 @socketio.on("set_x")
 def set_x(value):
-    stm.set_dac_x(value)
-    emit("update_x", stm.get_dac_x())
+    stm.set_dac_x_voltage(value)
+    emit("update_x", stm.get_dac_x_voltage())
 
 @socketio.on("set_y")
 def set_y(value):
-    stm.set_dac_y(value)
-    emit("update_y", stm.get_dac_y())
+    stm.set_dac_y_voltage(value)
+    emit("update_y", stm.get_dac_y_voltage())
 
 @socketio.on("set_z")
 def set_z(value):
-    stm.set_dac_z(value)
-    emit("update_z", stm.get_dac_z())
+    stm.set_dac_z_voltage(value)
+    emit("update_z", stm.get_dac_z_voltage())
 
 @socketio.on("move_stepper")
 def move_stepper(distance):
@@ -132,13 +202,36 @@ def set_bias_voltage(value):
     stm.set_dac_bias_voltage(value)
     emit("update_bias_voltage", stm.get_dac_bias_voltage())
 
+@socketio.on("upload_scan_pattern")
+def upload_scan_pattern(value):
+    pattern = pattern_factories[value["pattern"]](**value["parameters"])
+    pattern = pattern.scale(**value["size"])
+    pattern = pattern.rotate(value["rotation"])
+    pattern = pattern.translate(**value["position"])
+    scan_thread.set_pattern(pattern)
+    emit("update_pattern_points", pattern.get_point_array())
+
+@socketio.on("enable_scan")
+def enable_scan(enable):
+    if enable:
+        scan_thread.start_scan()
+    else:
+        stm.set_scan_enable(False)
+    emit("update_scan_enabled", stm.get_scan_enable())
+
 stm = STM()
+stm.set_scan_enable(False)
+stm.set_pid_enable(False)
 
 monitor_thread = MonitorThread(stm)
 monitor_thread.start()
 
 tip_monitor_thread = TipMonitorThread(stm)
 tip_monitor_thread.start()
+
+scan_thread = ScanThread(stm)
+scan_thread.start()
+
 
 if __name__ == "__main__":
     print("Starting server")
