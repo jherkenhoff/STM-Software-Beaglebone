@@ -2,6 +2,7 @@
 from os.path import join
 from .lm75 import LM75
 import numpy as np
+import os
 
 class STM:
     SYSFS_BASE_PATH = "/sys/devices/virtual/misc/stm"
@@ -20,6 +21,8 @@ class STM:
     SYSFS_PID_ENABLE          = join(SYSFS_BASE_PATH, "pid_enable")
     SYSFS_PATTERN_BUFFER_SIZE = join(SYSFS_BASE_PATH, "pattern_buffer_size")
     SYSFS_PATTERN_BUFFER_USED = join(SYSFS_BASE_PATH, "pattern_buffer_used")
+    SYSFS_SCAN_BUFFER_SIZE    = join(SYSFS_BASE_PATH, "scan_buffer_size")
+    SYSFS_SCAN_BUFFER_USED    = join(SYSFS_BASE_PATH, "scan_buffer_used")
     SYSFS_BIAS_VOLTAGE        = join(SYSFS_BASE_PATH, "bias_voltage")
     SYSFS_STEPPER_STEPS       = join(SYSFS_BASE_PATH, "stepper_steps")
 
@@ -37,7 +40,7 @@ class STM:
     STEPPER_LEVER_RATIO = 2.5/51.5 # Tip Lift Distance / Screw Lift Distance
 
     def __init__(self, dev_filepath = DEV_FILEPATH, sysfs_dir = SYSFS_BASE_PATH, i2c_bus = 1):
-        self.dev_file = open(dev_filepath, "wb", )
+        self.dev_file = os.open(dev_filepath, os.O_RDWR | os.O_NONBLOCK | os.O_SYNC )
 
         self.lm75_supply = LM75(busnum=i2c_bus, address=0x48)
         self.lm75_mainboard = LM75(busnum=i2c_bus, address=0x49)
@@ -184,6 +187,18 @@ class STM:
         with open(self.SYSFS_PATTERN_BUFFER_USED, "r") as f:
             return int(f.read())
 
+    def set_scan_buffer_size(self, size):
+        with open(self.SYSFS_SCAN_BUFFER_SIZE, "r+") as f:
+            f.write(str(int(size)))
+
+    def get_scan_buffer_size(self):
+        with open(self.SYSFS_SCAN_BUFFER_SIZE, "r") as f:
+            return int(f.read())
+
+    def get_scan_buffer_used(self):
+        with open(self.SYSFS_SCAN_BUFFER_USED, "r") as f:
+            return int(f.read())
+
     def set_dac_bias_raw(self, raw):
         with open(self.SYSFS_BIAS_VOLTAGE, "r+") as f:
             f.write(str(int(raw)))
@@ -204,18 +219,27 @@ class STM:
     def get_dac_bias_voltage(self):
         return self.dac_raw2dac_voltage(self.get_dac_bias_raw())
 
-    def write_pattern(self, pattern):
+    def write_pattern(self, pattern, start_index=0):
         x = pattern.x.clip(-self.DAC_REF, self.DAC_REF)
         y = pattern.y.clip(-self.DAC_REF, self.DAC_REF)
-        raw_pattern = np.empty((len(pattern.x), 2), dtype="int32")
-        raw_pattern[:,0] = self.dac_voltage2dac_raw(x)
-        raw_pattern[:,1] = self.dac_voltage2dac_raw(y)
+        raw_pattern = np.empty((len(pattern.x)-start_index, 2), dtype="int32")
+        raw_pattern[:,0] = self.dac_voltage2dac_raw(x[start_index:])
+        raw_pattern[:,1] = self.dac_voltage2dac_raw(y[start_index:])
 
-        self.dev_file.write(raw_pattern)
-        self.dev_file.flush()
+        written_bytes = os.write(self.dev_file, raw_pattern)
+        return int(written_bytes/8) # Return number of samples written to the buffer (one sample = 8 bytes)
 
-    def get_buffer_data(self, dtype="int32", word_width=18):
-        return pattern
+    def read_scan(self):
+        raw = os.read(self.dev_file, 512) # TODO: Replace max read count with something sensible
+        array = np.frombuffer(raw, dtype="int32")
+
+        num_samples_read = int(len(array)/2)
+        scan_result = {
+            "adc": self.adc_voltage2tip_current(self.adc_raw2adc_voltage(array[0::2])),
+            "z": self.dac_raw2dac_voltage(array[1::2])
+        }
+
+        return (num_samples_read, scan_result)
 
     def get_supply_temp(self):
         return self.lm75_supply.get_temp()
@@ -236,7 +260,6 @@ class STM:
 
     def move_stepper_tip_distance(self, distance):
         self.move_stepper(self.angle2steps(self.tip_movement2stepper_angle(distance)))
-
 
     def stepper_move_finished(self):
         with open(self.SYSFS_STEPPER_STEPS, "r") as f:

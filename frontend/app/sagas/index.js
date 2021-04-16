@@ -33,6 +33,8 @@ import {
   updatePatternPoints,
   updateScanRange,
   updateScanEnabled,
+  updateScanResult,
+  updateScanStatus,
   addLogMessage,
   addLocalLogMessage,
 } from 'actions'
@@ -267,6 +269,10 @@ function* handleUpdateScanEnabled(enabled) {
   yield put(updateScanEnabled(enabled))
 }
 
+function* handleUpdateScanResult(scanResult) {
+  yield put(updateScanResult(scanResult))
+}
+
 function* handleLog(entry) {
   yield put(addLogMessage(entry))
 }
@@ -290,6 +296,7 @@ export function* rootSaga() {
   const patternPointsChannel = yield call(createSocketChannel, socket, "update_pattern_points")
   const scanRangeChannel = yield call(createSocketChannel, socket, "update_scan_range")
   const scanEnabledChannel = yield call(createSocketChannel, socket, "update_scan_enabled")
+  const scanResultChannel = yield call(createSocketChannel, socket, "update_scan_result")
   const logChannel = yield call(createSocketChannel, socket, "log")
 
   yield takeEvery(socketMonitorChannel, handleSocketChanged)
@@ -309,6 +316,7 @@ export function* rootSaga() {
   yield takeEvery(patternPointsChannel, handleUpdatePatternPoints)
   yield takeEvery(scanRangeChannel, handleUpdateScanRange)
   yield takeEvery(scanEnabledChannel, handleUpdateScanEnabled)
+  yield takeEvery(scanResultChannel, handleUpdateScanResult)
   yield takeEvery(logChannel, handleLog)
   yield fork(handleMonitorIntervalChanges, socket)
   yield fork(handlePidEnableToggles, socket)

@@ -3,9 +3,14 @@
 
 #include "../common/circularbuffer.h"
 
-struct scan_point {
+struct pattern_point_s {
     int32_t x;
     int32_t y;
+};
+
+struct scan_point_s {
+    int32_t adc;
+    int32_t z;
 };
 
 // magic word
@@ -32,6 +37,9 @@ struct arm_pru1_share {
 
    CircularBufferContext pattern_buffer_ctx;
    void *pattern_buffer;
+
+   CircularBufferContext scan_buffer_ctx;
+   void *scan_buffer;
 };
 
 void set_scan_enabled(volatile struct arm_pru1_share *share, bool enable) {

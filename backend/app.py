@@ -7,6 +7,8 @@ from time import sleep, time_ns, time
 from random import random
 from pystm import STM, PatternGen
 
+import numpy as np
+
 
 class MonitorThread(Thread):
     def __init__(self, stm):
@@ -63,18 +65,95 @@ class ScanThread(Thread):
     def start_scan(self):
         self.start_event.set()
 
+    @staticmethod
+    def calc_result_statistic(buf, result_statistics):
+        if result_statistics == None:
+            return {
+                "adc": {
+                    "min": buf["adc"].min(),
+                    "max": buf["adc"].max()
+                },
+                "z": {
+                    "min": buf["z"].min(),
+                    "max": buf["z"].max()
+                }
+            }
+        else:
+            return {
+                "adc": {
+                    "min": min( result_statistics["adc"]["min"], buf["adc"].min() ),
+                    "max": max( result_statistics["adc"]["max"], buf["adc"].max() )
+                },
+                "z": {
+                    "min": min( result_statistics["z"]["min"], buf["z"].min() ),
+                    "max": max( result_statistics["z"]["max"], buf["z"].max() )
+                }
+            }
+
+
     def run(self):
-        while (1):
+        stm.set_scan_enable(False)
+        stm.set_pattern_buffer_size(1024)
+        stm.set_scan_buffer_size(1024)
+
+        # Empty the scan buffer in order to "synchronize" pattern and scan buffer
+        while 1:
+            read_cnt, buf = stm.read_scan()
+            if read_cnt == 0:
+                break
+
+        while 1:
             self.start_event.wait()
             self.start_event.clear()
-            print("Start scan")
-            stm.set_pattern_buffer_size(512)
             stm.set_scan_enable(True)
-            stm.write_pattern(self.pattern)
-            while (stm.get_pattern_buffer_used() != 0):
-                sleep(0.1)
+
+            written_points = 0
+            read_points = 0
+            last_updated_count = 0
+            result_points = []
+
+            result_statistics = None
+
+            while len(result_points) != self.pattern.get_point_count():
+                if written_points < self.pattern.get_point_count():
+                    written_points = written_points + stm.write_pattern(self.pattern, written_points)
+                read_cnt, buf = stm.read_scan()
+
+                # Add new data to result
+                for i in range(read_cnt):
+                    result_points.append({
+                        "x": self.pattern.x[read_points+i],
+                        "y": self.pattern.y[read_points+i],
+                        "adc": buf["adc"][i],
+                        "z": buf["z"][i]
+                    })
+                    
+                read_points = read_points + read_cnt
+
+                # Calc statistics
+                if read_cnt > 0:
+                    result_statistics = self.calc_result_statistic(buf, result_statistics)
+
+                # Only send data every 30 new points
+                if len(result_points) > last_updated_count + 30:
+                    socketio.emit("update_scan_result", {
+                        "points": result_points,
+                        "statistics": result_statistics,
+                        "running": True,
+                        "progress": len(result_points) / self.pattern.get_point_count() * 100,
+                        "finished": False
+                    })
+                    last_updated_count = len(result_points)
+
             stm.set_scan_enable(False)
-            print("Scan finished")
+
+            socketio.emit("update_scan_result", {
+                "points": result_points,
+                "statistics": result_statistics,
+                "running": False,
+                "progress": len(result_points) / self.pattern.get_point_count() * 100,
+                "finished": True
+            })
             socketio.emit("update_scan_enabled", stm.get_scan_enable(), broadcast=True)
 
 

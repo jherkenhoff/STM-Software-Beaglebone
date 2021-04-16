@@ -3,8 +3,11 @@ import numpy as np
 class Pattern:
     def __init__(self, x, y):
         assert len(x) == len(y)
-        self.x = x
-        self.y = y
+        self.x = np.array(x)
+        self.y = np.array(y)
+
+    def get_point_count(self):
+        return len(self.x)
 
     def get_point_array(self):
         points = []
@@ -23,8 +26,11 @@ class Pattern:
         return self
 
     def rotate(self, angle):
-        self.x = np.cos(angle)*self.x - np.sin(angle)*self.y
-        self.y = np.sin(angle)*self.x + np.cos(angle)*self.y
+        x = np.cos(np.deg2rad(-angle))*self.x - np.sin(np.deg2rad(-angle))*self.y
+        y = np.sin(np.deg2rad(-angle))*self.x + np.cos(np.deg2rad(-angle))*self.y
+
+        self.x = x
+        self.y = y
         return self
 
 class PatternGen:

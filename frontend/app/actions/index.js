@@ -52,6 +52,8 @@ export const UPDATE_SCAN_RANGE = "UPDATE_SCAN_RANGE"
 export const UPDATE_SCAN_ENABLED = "UPDATE_SCAN_ENABLED"
 export const SET_SCAN_ENABLED = "SET_SCAN_ENABLED"
 
+export const UPDATE_SCAN_RESULT = "UPDATE_SCAN_RESULT"
+
 
 export function socketConnectionChanged(state) {
   return {type: SOCKET_CONNECTION_CHANGED, state}
@@ -207,4 +209,12 @@ export function setScanEnabled(enabled) {
 
 export function updateScanEnabled(enabled) {
   return {type: UPDATE_SCAN_ENABLED, enabled}
+}
+
+export function updateScanResult(scanResult) {
+  return {type: UPDATE_SCAN_RESULT, scanResult}
+}
+
+export function updateScanStatus(status) {
+  return {type: UPDATE_SCAN_STATUS, status}
 }

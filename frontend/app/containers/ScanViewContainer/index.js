@@ -19,7 +19,11 @@ function ScanViewContainer(props) {
         boundingBoxRotation={props.boundingBoxRotation}
         scanRange={props.scanRange}
         currentPosition={props.currentPosition}
+        scanResult={props.scanResult}
+        isPatternUploaded={props.isPatternUploaded}
+        isScanResultUpToDate={props.isScanResultUpToDate}
       />
+
     </DashboardCard>
   );
 }
@@ -31,7 +35,10 @@ function mapStateToProps(state) {
     boundingBoxPosition: state.scan.boundingBox.position,
     boundingBoxRotation: state.scan.boundingBox.rotation,
     scanRange: state.scan.scanRange,
-    currentPosition: {x: state.tipMonitor.x, y: state.tipMonitor.y}
+    currentPosition: {x: state.tipMonitor.x, y: state.tipMonitor.y},
+    scanResult: state.scan.scanResult,
+    isScanResultUpToDate: state.scan.isScanResultUpToDate,
+    isPatternUploaded: state.scan.isPatternUploaded
   }
 }
 

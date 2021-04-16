@@ -122,9 +122,12 @@ void move_stepper(uint32_t steps, uint32_t direction) {
 }
 
 void main(void) {
-	struct scan_point point;
+	struct pattern_point_s pattern_point;
+	struct scan_point_s scan_point;
 	uint32_t pid_step;
 	int32_t adc_value;
+	bool write_scan_buf = false;
+	bool increase_pattern = true;
 
 	arm_share.magic = ARM_PRU1_SHARE_MAGIC;
 	arm_share.pid_steps = 1;
@@ -140,22 +143,40 @@ void main(void) {
 	init_dacs();
 
 	while (1) {
+
+		if (arm_share.pid_enable || write_scan_buf) {
+				adc_value = get_new_adc_sample(pru_pru_share);
+		}
+
 		// Perform PID calculations and update Z DAC
 		if (arm_share.pid_enable) {
 			for (pid_step = 0; pid_step < arm_share.pid_steps; pid_step++) {
-				adc_value = get_new_adc_sample(pru_pru_share);
 				arm_share.dac_z = calc_pid(arm_share.pid_setpoint - adc_value, arm_share.pid_kp, arm_share.pid_ki);
 			}
 		}
 		dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
 
+		if (write_scan_buf) {
+			scan_point.adc = adc_value;
+			scan_point.z = arm_share.dac_z;
+			if(!CircularBufferPushBack(&arm_share.scan_buffer_ctx, arm_share.scan_buffer, &scan_point)) {
+				write_scan_buf = false;
+				increase_pattern = true;
+			} else {
+				increase_pattern = false;
+		  }
+		}
+
 		// Update XY DACs
 		if (arm_share.scan_enable) {
-			if (!CircularBufferPopFront(&arm_share.pattern_buffer_ctx, arm_share.pattern_buffer, &point)) {
-				dac_set_value(point.x, PIN_DAC_CS_X);
-				dac_set_value(point.y, PIN_DAC_CS_Y);
-				arm_share.dac_x = point.x;
-				arm_share.dac_y = point.y;
+			if (increase_pattern) {
+				if (!CircularBufferPopFront(&arm_share.pattern_buffer_ctx, arm_share.pattern_buffer, &pattern_point)) {
+					dac_set_value(pattern_point.x, PIN_DAC_CS_X);
+					dac_set_value(pattern_point.y, PIN_DAC_CS_Y);
+					arm_share.dac_x = pattern_point.x;
+					arm_share.dac_y = pattern_point.y;
+					write_scan_buf = true;
+				}
 			}
 		} else {
 			dac_set_value(arm_share.dac_x, PIN_DAC_CS_X);
