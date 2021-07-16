@@ -1,10 +1,10 @@
 import produce from 'immer';
-import { SOCKET_CONNECTION_CHANGED, UPDATE_MONITOR_INTERVAL, SET_MONITOR_MEMORY, TEMPERATURE_CHANGED, ADD_LOG_MESSAGE } from 'actions'
+import { SOCKET_CONNECTION_CHANGED, UPDATE_ENV_MONITOR_INTERVAL, SET_ENV_MONITOR_MEMORY, TEMPERATURE_CHANGED, ADD_LOG_MESSAGE } from 'actions'
 
 const initialState = {
   connection: false,
-  monitorInterval: 5,
-  monitorMemory: 100,
+  envMonitorInterval: 5,
+  envMonitorMemory: 100,
   temperatureLog: [],
   mainboardTemperature: 0,
   supplyTemperature: 0,
@@ -18,12 +18,12 @@ const reducer = (state = initialState, action) =>
       case SOCKET_CONNECTION_CHANGED:
         draft.connection = action.state
         break
-      case SET_MONITOR_MEMORY:
-        draft.monitorMemory = action.memory
+      case SET_ENV_MONITOR_MEMORY:
+        draft.envMonitorMemory = action.memory
         draft.temperatureLog = draft.temperatureLog.slice(-action.memory)
         break
-      case UPDATE_MONITOR_INTERVAL:
-        draft.monitorInterval = action.interval
+      case UPDATE_ENV_MONITOR_INTERVAL:
+        draft.envMonitorInterval = action.interval
         break
       case TEMPERATURE_CHANGED:
         if (draft.temperatureLog.length >= draft.monitorMemory) {

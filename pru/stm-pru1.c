@@ -6,17 +6,22 @@ DAC
 
 #define PRU 1
 
+#define LOOP_DELAY 100
+
+#define DAC_MAX 131071
+#define DAC_MIN -131072
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <pru_cfg.h>
 #include <pru_intc.h>
 
+#include "fix16.h"
 #include "resource_table_1.h"
 #include "pru_defs.h"
 #include "stm-pru1.h"
 #include "pru-pru-share.h"
-
 /* Structure describing the shared context structure shared with the ARM host.
  * Compiler attributes place this at 0x0000 */
 volatile struct arm_pru1_share arm_share __attribute__((location(0))) = {0};
@@ -89,15 +94,26 @@ void init_dacs() {
 	update_dacs();
 }
 
+int32_t clip_to_dac_range(int32_t value) {
+    if (value > DAC_MAX)
+        return DAC_MAX;
+    else if (value < DAC_MIN)
+        return DAC_MIN;
+    else
+        return value;
+}
+
 int32_t calc_pid(int32_t error, int32_t k_p, int32_t k_i) {
-	static int64_t i_term = 0;
-	int64_t p_term;
-	int32_t dt = 1;
+		static int64_t i_term = 0;
+		int32_t dt = LOOP_DELAY;
 
-	p_term = (int64_t)k_p * (int64_t)error;
-	i_term += (int64_t)k_i * (int64_t)error * (int64_t)dt;
+		if (k_i == 0)
+				i_term = 0;
+		else
+				i_term +=  (int64_t)error * (int64_t)dt * k_i;
 
-    return (int32_t)(( (p_term + i_term) >> 32 ) & 0xFFFFFFFF);
+		i_term = ((int64_t)clip_to_dac_range(i_term>>32))<<32;
+		return ((int64_t)k_p*(int64_t)error + i_term) >> 32;
 }
 
 
@@ -126,6 +142,7 @@ void main(void) {
 	struct scan_point_s scan_point;
 	uint32_t pid_step;
 	int32_t adc_value;
+	int32_t error;
 	bool write_scan_buf = false;
 	bool increase_pattern = true;
 
@@ -148,14 +165,6 @@ void main(void) {
 				adc_value = get_new_adc_sample(pru_pru_share);
 		}
 
-		// Perform PID calculations and update Z DAC
-		if (arm_share.pid_enable) {
-			for (pid_step = 0; pid_step < arm_share.pid_steps; pid_step++) {
-				arm_share.dac_z = calc_pid(arm_share.pid_setpoint - adc_value, arm_share.pid_kp, arm_share.pid_ki);
-			}
-		}
-		dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
-
 		if (write_scan_buf) {
 			scan_point.adc = adc_value;
 			scan_point.z = arm_share.dac_z;
@@ -166,6 +175,16 @@ void main(void) {
 				increase_pattern = false;
 		  }
 		}
+
+		// Perform PID calculations and update Z DAC
+		if (arm_share.pid_enable) {
+			for (pid_step = 0; pid_step < arm_share.pid_steps; pid_step++) {
+				error = fix16_log(abs(adc_value)+1) - fix16_log(arm_share.pid_setpoint);
+				arm_share.dac_z = calc_pid(error, arm_share.pid_kp, arm_share.pid_ki);
+			}
+		}
+		arm_share.dac_z = clip_to_dac_range(arm_share.dac_z);
+		dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
 
 		// Update XY DACs
 		if (arm_share.scan_enable) {
@@ -194,6 +213,6 @@ void main(void) {
 				move_stepper(-arm_share.stepper_steps, 0);
 				arm_share.stepper_steps = 0;
 		}
-		__delay_cycles(1000000);
+		__delay_cycles(LOOP_DELAY);
 	}
 }

@@ -2,7 +2,8 @@ import React from "react";
 import PropTypes from 'prop-types';
 import styled from 'styled-components';
 
-import { Form, Button } from 'semantic-ui-react'
+import { Form, Button, Icon, Label } from 'semantic-ui-react'
+import ValueInput from 'components/ValueInput'
 
 function PidSettings(props) {
 
@@ -14,31 +15,26 @@ function PidSettings(props) {
           <Button toggle active={props.enabled} onClick={(e) => props.onEnableToggle()}>Off</Button >
         </Form.Field>
         <Form.Field>
-          <label>Setpoint / nA</label>
-          <input type='number' value={props.setpoint*1e9} onChange={(e) => props.onSetpointChange(parseFloat(e.target.value/1e9))}/>
-        </Form.Field>
-        <Form.Field>
-          <label>Averages</label>
+          <label>PID Steps</label>
           <input type='number'/>
         </Form.Field>
       </Form.Group>
 
-      <Form.Group widths='equal'>
-        <Form.Field>
-          <label>P</label>
-          <input type="number" value={props.P} onChange={(e) => props.onPChange(parseFloat(e.target.value))} />
-        </Form.Field>
+      <Form.Field inline>
+        <label>Setpoint</label>
+        <ValueInput onChange={(v) => props.onSetpointChange(v/1e9)} value={props.setpoint*1e9} unit="nA" precision={1}/>
+      </Form.Field>
 
-        <Form.Field>
-          <label>I</label>
-          <input type="number" value={props.I} onChange={(e) => props.onIChange(parseFloat(e.target.value))} />
-        </Form.Field>
+      <Form.Field inline>
+        <label>P (mV/nA)</label>
+        <ValueInput onChange={(v) => props.onPChange(v/1e3*1e9)} value={props.P*1e3/1e9} precision={1}/>
+      </Form.Field>
 
-        <Form.Field>
-          <label>D</label>
-          <input type="number" value={props.D} onChange={(e) => props.onDChange(parseFloat(e.target.value))} />
-        </Form.Field>
-      </Form.Group>
+
+      <Form.Field inline>
+        <label>I (mV/nA/ms)</label>
+        <ValueInput onChange={(v) => props.onIChange(v/1e3*1e9*1e3)} value={props.I*1e3/1e9/1e3} precision={1}/>
+      </Form.Field>
     </Form>
   );
 }

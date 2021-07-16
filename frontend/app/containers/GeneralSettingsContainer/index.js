@@ -6,30 +6,38 @@ import PropTypes from "prop-types";
 
 import GeneralSettings from 'components/GeneralSettings';
 
-import { setMonitorInterval, setMonitorMemory } from "actions";
+import { setEnvMonitorInterval, setEnvMonitorMemory, setTipMonitorInterval, setTipMonitorMemory } from "actions";
 
 function GeneralSettingsContainer(props) {
   return (
     <GeneralSettings
-      monitorInterval={props.monitorInterval}
-      monitorMemory={props.monitorMemory}
-      onMonitorIntervalChanged={props.setMonitorInterval}
-      onMonitorMemoryChanged={props.setMonitorMemory}
+      envMonitorInterval={props.envMonitorInterval}
+      envMonitorMemory={props.envMonitorMemory}
+      tipMonitorInterval={props.tipMonitorInterval}
+      tipMonitorMemory={props.tipMonitorMemory}
+      onEnvMonitorIntervalChanged={props.setEnvMonitorInterval}
+      onEnvMonitorMemoryChanged={props.setEnvMonitorMemory}
+      onTipMonitorIntervalChanged={props.setTipMonitorInterval}
+      onTipMonitorMemoryChanged={props.setTipMonitorMemory}
     />
   );
 }
 
 function mapStateToProps(state) {
   return {
-    monitorMemory: state.monitor.monitorMemory,
-    monitorInterval: state.monitor.monitorInterval
+    envMonitorInterval: state.monitor.envMonitorInterval,
+    envMonitorMemory: state.monitor.envMonitorMemory,
+    tipMonitorInterval: state.tipMonitor.interval,
+    tipMonitorMemory: state.tipMonitor.memory,
   }
 }
 
 function mapDispatchToProps(dispatch) {
   return {
-    setMonitorInterval: (interval) => dispatch(setMonitorInterval(interval)),
-    setMonitorMemory: (memory) => dispatch(setMonitorMemory(memory))
+    setEnvMonitorInterval: (interval) => dispatch(setEnvMonitorInterval(interval)),
+    setEnvMonitorMemory: (memory) => dispatch(setEnvMonitorMemory(memory)),
+    setTipMonitorInterval: (interval) => dispatch(setTipMonitorInterval(interval)),
+    setTipMonitorMemory: (memory) => dispatch(setTipMonitorMemory(memory))
   };
 }
 

@@ -3,18 +3,12 @@ import React from 'react';
 import PropTypes from "prop-types";
 import styled from 'styled-components';
 import { Button, Icon, Form, Input, Label } from 'semantic-ui-react'
+import ValueInput from 'components/ValueInput'
 
 function BiasVoltage(props) {
 
   return (
-     <Input fluid labelPosition="right" type="number" onChange={(e) => props.onChange(parseFloat(e.target.value))} >
-       <input type="number"/>
-       <Label>
-         <Icon name="caret right" />
-         {(props.voltage).toFixed(2)} V
-       </Label>
-     </Input>
-
+      <ValueInput onChange={(v) => props.onChange(v/1e3)} value={props.voltage*1e3} unit="mV" precision={3}/>
   );
 }
 

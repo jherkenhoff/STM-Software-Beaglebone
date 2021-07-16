@@ -2,7 +2,8 @@ import { takeEvery, take, put, call, fork } from 'redux-saga/effects'
 import { eventChannel } from 'redux-saga'
 
 import {
-  SET_MONITOR_INTERVAL,
+  SET_ENV_MONITOR_INTERVAL,
+  SET_TIP_MONITOR_INTERVAL,
   TOGGLE_PID_ENABLE,
   SET_PID_P,
   SET_PID_I,
@@ -16,10 +17,10 @@ import {
   UPLOAD_SCAN_PATTERN,
   SET_SCAN_ENABLED,
   socketConnectionChanged,
-  pidEnableChanged,
   tipMonitorUpdate,
   temperatureChanged,
-  updateMonitorInterval,
+  updateEnvMonitorInterval,
+  updateTipMonitorInterval,
   updatePidEnabled,
   updatePidP,
   updatePidI,
@@ -115,10 +116,17 @@ function* handleTemperatureChanged(descriptor) {
   yield put(temperatureChanged(descriptor["time"], descriptor["mainboard"], descriptor["supply"]))
 }
 
-function* handleMonitorIntervalChanges(socket) {
+function* handleEnvMonitorIntervalChanged(socket) {
   while (true) {
-    let action = yield take(SET_MONITOR_INTERVAL)
-    yield socket.emit("set_monitor_interval", action.interval)
+    let action = yield take(SET_ENV_MONITOR_INTERVAL)
+    yield socket.emit("set_env_monitor_interval", action.interval)
+  }
+}
+
+function* handleTipMonitorIntervalChanged(socket) {
+  while (true) {
+    let action = yield take(SET_TIP_MONITOR_INTERVAL)
+    yield socket.emit("set_tip_monitor_interval", action.interval)
   }
 }
 
@@ -212,9 +220,12 @@ function* handleSetScanEnabled(socket) {
   }
 }
 
+function* handleUpdateEnvMonitorInterval(interval) {
+  yield put(updateEnvMonitorInterval(interval))
+}
 
-function* handleUpdateMonitorInterval(interval) {
-  yield put(updateMonitorInterval(interval))
+function* handleUpdateTipMonitorInterval(interval) {
+  yield put(updateTipMonitorInterval(interval))
 }
 
 function* handleUpdatePidEnabled(enable) {
@@ -282,7 +293,8 @@ export function* rootSaga() {
   const socketMonitorChannel = yield call(createSocketMonitorChannel, socket)
   const tipMonitorUpdateChannel = yield call(createSocketChannel, socket, "tip_monitor_update")
   const temperatureChannel = yield call(createSocketChannel, socket, "temperature")
-  const monitorIntervalChannel = yield call(createSocketChannel, socket, "update_monitor_interval")
+  const envMonitorIntervalChannel = yield call(createSocketChannel, socket, "update_env_monitor_interval")
+  const tipMonitorIntervalChannel = yield call(createSocketChannel, socket, "update_tip_monitor_interval")
   const pidEnabledChannel = yield call(createSocketChannel, socket, "update_pid_enabled")
   const pidPChannel = yield call(createSocketChannel, socket, "update_pid_p")
   const pidIChannel = yield call(createSocketChannel, socket, "update_pid_i")
@@ -302,7 +314,8 @@ export function* rootSaga() {
   yield takeEvery(socketMonitorChannel, handleSocketChanged)
   yield takeEvery(tipMonitorUpdateChannel, handleTipMonitorUpdate)
   yield takeEvery(temperatureChannel, handleTemperatureChanged)
-  yield takeEvery(monitorIntervalChannel, handleUpdateMonitorInterval)
+  yield takeEvery(envMonitorIntervalChannel, handleUpdateEnvMonitorInterval)
+  yield takeEvery(tipMonitorIntervalChannel, handleUpdateTipMonitorInterval)
   yield takeEvery(pidEnabledChannel, handleUpdatePidEnabled)
   yield takeEvery(pidPChannel, handleUpdatePidP)
   yield takeEvery(pidIChannel, handleUpdatePidI)
@@ -318,7 +331,8 @@ export function* rootSaga() {
   yield takeEvery(scanEnabledChannel, handleUpdateScanEnabled)
   yield takeEvery(scanResultChannel, handleUpdateScanResult)
   yield takeEvery(logChannel, handleLog)
-  yield fork(handleMonitorIntervalChanges, socket)
+  yield fork(handleEnvMonitorIntervalChanged, socket)
+  yield fork(handleTipMonitorIntervalChanged, socket)
   yield fork(handlePidEnableToggles, socket)
   yield fork(handleSetPidP, socket)
   yield fork(handleSetPidI, socket)

@@ -53,23 +53,29 @@ class PatternGen:
             else:
                 x = np.concatenate((x, single_line_x[s:]))
 
-        return Pattern(x,y).translate(-0.5, -0.5)
+        return Pattern(x, y).translate(-0.5, -0.5)
 
     @staticmethod
     def sine(periods, points_per_period):
         y = np.linspace(0, 1, periods*points_per_period)-0.5
         x = np.sin(2*np.pi*y*periods)*0.5
-        return Pattern(x,y)
+        return Pattern(x, y)
 
     @staticmethod
     def cosine(periods, points_per_period):
         y = np.linspace(0, 1, periods*points_per_period)-0.5
         x = np.cos(2*np.pi*y*periods)*0.5
-        return Pattern(x,y)
+        return Pattern(x, y)
 
     @staticmethod
     def spiral(turns, points_per_turn):
         i = np.linspace(0, 1, points_per_turn*turns)
         x = np.sin(2*np.pi*np.sqrt(i)*turns)*0.5*np.sqrt(i)
         y = np.cos(2*np.pi*np.sqrt(i)*turns)*0.5*np.sqrt(i)
-        return Pattern(x,y)
+        return Pattern(x, y)
+
+    @staticmethod
+    def point(n_points):
+        x = np.zeros(n_points)
+        y = np.zeros(n_points)
+        return Pattern(x, y)

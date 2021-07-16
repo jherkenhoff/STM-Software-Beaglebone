@@ -7,34 +7,12 @@ import GeneralSettingsContainer from 'containers/GeneralSettingsContainer'
 
 function Topbar(props) {
   return (
-    <Menu attached>
+    <Menu attached color={props.connected? undefined:"red"} inverted={!props.connected}>
       <Menu.Item header>
         STM Control
       </Menu.Item>
-      {!props.connected &&
-        <Menu.Item>
-          <Label color='red'>
-           <Icon name='circle notch' loading />
-            Not connected
-          </Label>
-        </Menu.Item>
-      }
 
       <Menu.Menu position='right'>
-        <Menu.Item>
-          Tip Current: <b>{(props.tipCurrent*1e9).toFixed(3)} nA</b>
-        </Menu.Item>
-        <Menu.Item>
-          <Label color={props.tunneling? 'olive':'grey'}>
-            Tunneling
-          </Label>
-          <Label color={props.pid? 'olive':'grey'}>
-            PID
-          </Label>
-          <Label color={props.scanning? 'olive':'grey'}>
-            Scan
-          </Label>
-        </Menu.Item>
 
         <Popup
           trigger={
@@ -57,10 +35,6 @@ function Topbar(props) {
 }
 
 Topbar.propTypes = {
-  tunneling: PropTypes.bool,
-  pid: PropTypes.bool,
-  scan: PropTypes.bool,
-  tipCurrent: PropTypes.number,
   connected: PropTypes.bool
 };
 

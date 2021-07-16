@@ -92,6 +92,20 @@ bool CircularBufferFull(const volatile CircularBufferContext *ctx)
 }
 
 /*!
+ * \breif Checks if the buffer is empty.
+ *
+ * Asserts:
+ *      'ctx' is not NULL.
+ *
+ * \param[in] *ctx              Pointer to the circular buffer context.
+ * \return                      true if the buffer is empty otherwise false.
+ */
+bool CircularBufferEmpty(const volatile CircularBufferContext *ctx)
+{
+    return (ctx->read_pos == ctx->write_pos);
+}
+
+/*!
  * \breif Adds an new element to the end of the buffer. The "val" content is
  * copied to the element.
  *
@@ -169,8 +183,7 @@ void CircularBufferCommitBulkPush(volatile CircularBufferContext *ctx, size_t el
  */
 int32_t CircularBufferPopFront(volatile CircularBufferContext *ctx, char *buf, void *val)
 {
-    // Check if empty
-    if (ctx->read_pos == ctx->write_pos)
+    if (CircularBufferEmpty(ctx))
         return -1;
 
     memcpy(val, &buf[ctx->read_pos * ctx->element_size], ctx->element_size);
@@ -181,14 +194,14 @@ int32_t CircularBufferPopFront(volatile CircularBufferContext *ctx, char *buf, v
 }
 
 
-size_t CircularBufferPrepareBulkPop(volatile CircularBufferContext *ctx, char *buf, char **buf_pos)
+size_t CircularBufferPrepareBulkPop(volatile CircularBufferContext *ctx, void *buf, void **buf_pos)
 {
     *buf_pos = &buf[ctx->read_pos * ctx->element_size];
 
     if (ctx->read_pos > ctx->write_pos) {
         // Read pointer is ahead of write pointer in the linear buffer, thus
         // we can read a contiguous block of memory until the buffer end.
-        return ctx->max_size + 1 - ctx->write_pos;
+        return ctx->max_size + 1 - ctx->read_pos;
     } else {
         // Read pointer is behind the write pointer in the linear buffer, thus
         // we can only write up to the write pointer.
@@ -266,20 +279,6 @@ size_t CircularBufferSize(const volatile CircularBufferContext *ctx)
 size_t CircularBufferSpace(const volatile CircularBufferContext *ctx)
 {
     return (ctx->max_size - CircularBufferSize(ctx));
-}
-
-/*!
- * \breif Checks if the buffer is empty.
- *
- * Asserts:
- *      'ctx' is not NULL.
- *
- * \param[in] *ctx              Pointer to the circular buffer context.
- * \return                      true if the buffer is empty otherwise false.
- */
-bool CircularBufferEmpty(const volatile CircularBufferContext *ctx)
-{
-    return (ctx->read_pos == ctx->write_pos);
 }
 
 

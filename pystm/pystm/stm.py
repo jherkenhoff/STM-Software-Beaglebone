@@ -26,6 +26,8 @@ class STM:
     SYSFS_BIAS_VOLTAGE        = join(SYSFS_BASE_PATH, "bias_voltage")
     SYSFS_STEPPER_STEPS       = join(SYSFS_BASE_PATH, "stepper_steps")
 
+    F_CLK = 200e6
+
     ADC_V_REFBUF = 4.096 # Voltage on ADC Refbuf pin
     ADC_BITS     = 18    # Resolution of ADC
     R_AMP        = 100e6 # Value of resistor in transimpedance amplifier
@@ -34,8 +36,8 @@ class STM:
     DAC_BITS     = 18
 
     STEPPER_U_STEPS = 16
-    STEPPER_GEAR_RATIO = 26 + 103/121
-    STEPPER_STEP_ANGLE = 1.8 # in deg
+    STEPPER_GEAR_RATIO = 32
+    STEPPER_STEP_ANGLE = 5.625 # in deg
     STEPPER_SCREW_PITCH = 0.25e-3 # in m (= 0.25 mm)
     STEPPER_LEVER_RATIO = 2.5/51.5 # Tip Lift Distance / Screw Lift Distance
 
@@ -78,7 +80,6 @@ class STM:
 
     def set_pid_setpoint_raw(self, setpoint):
         with open(self.SYSFS_PID_SETPOINT, "r+") as f:
-            print(setpoint)
             f.write(str(int(setpoint)))
 
     def get_pid_setpoint_raw(self):
@@ -92,20 +93,28 @@ class STM:
         return self.adc_voltage2tip_current(self.adc_raw2adc_voltage(self.get_pid_setpoint_raw()))
 
     def set_pid_p(self, kp):
+        # Convert units of kp from V/A to DAC_VALUE/ADC_VALUE
+        factor = self.dac_voltage2dac_raw(1) / self.adc_voltage2adc_raw(self.tip_current2adc_voltage(1))
+        kp = kp * factor
+
         with open(self.SYSFS_PID_KP, "r+") as f:
-            f.write(str(int(kp)))
+            f.write(str(int(kp*2**32)))
 
     def get_pid_p(self):
+        factor = self.dac_voltage2dac_raw(1) / self.adc_voltage2adc_raw(self.tip_current2adc_voltage(1))
         with open(self.SYSFS_PID_KP, "r") as f:
-            return int(f.read())
+            return int(f.read())/2**32 / factor
 
     def set_pid_i(self, ki):
+        factor = self.dac_voltage2dac_raw(1) / self.adc_voltage2adc_raw(self.tip_current2adc_voltage(1)) / self.F_CLK
+        ki = ki * factor
         with open(self.SYSFS_PID_KI, "r+") as f:
-            f.write(str(int(ki)))
+            f.write(str(int(ki*2**32)))
 
     def get_pid_i(self):
+        factor = self.dac_voltage2dac_raw(1) / self.adc_voltage2adc_raw(self.tip_current2adc_voltage(1)) / self.F_CLK
         with open(self.SYSFS_PID_KI, "r") as f:
-            return int(f.read())
+            return int(f.read())/2**32 / factor
 
     def set_pid_d(self, kd):
         with open(self.SYSFS_PID_KD, "r+") as f:

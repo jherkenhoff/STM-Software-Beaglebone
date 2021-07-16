@@ -3,9 +3,13 @@ export const SCAN_ENABLE_CHANGED = "SCAN_ENABLE_CHANGED"
 export const TIP_MONITOR_UPDATE = "TIP_MONITOR_UPDATE"
 export const TEMPERATURE_CHANGED = "TEMPERATURE_CHANGED"
 
-export const SET_MONITOR_INTERVAL = "SET_MONITOR_INTERVAL"
-export const UPDATE_MONITOR_INTERVAL = "UPDATE_MONITOR_INTERVAL"
-export const SET_MONITOR_MEMORY = "SET_MONITOR_MEMORY"
+export const SET_ENV_MONITOR_INTERVAL = "SET_ENV_MONITOR_INTERVAL"
+export const UPDATE_ENV_MONITOR_INTERVAL = "UPDATE_ENV_MONITOR_INTERVAL"
+export const SET_ENV_MONITOR_MEMORY = "SET_ENV_MONITOR_MEMORY"
+
+export const SET_TIP_MONITOR_INTERVAL = "SET_TIP_MONITOR_INTERVAL"
+export const UPDATE_TIP_MONITOR_INTERVAL = "UPDATE_TIP_MONITOR_INTERVAL"
+export const SET_TIP_MONITOR_MEMORY = "SET_TIP_MONITOR_MEMORY"
 
 export const ADD_LOG_MESSAGE = "ADD_LOG_MESSAGE"
 
@@ -71,16 +75,28 @@ export function temperatureChanged(time, mainboard, supply) {
     return {type: TEMPERATURE_CHANGED, time, mainboard, supply}
 }
 
-export function setMonitorInterval(interval) {
-    return {type: SET_MONITOR_INTERVAL, interval}
+export function setEnvMonitorInterval(interval) {
+    return {type: SET_ENV_MONITOR_INTERVAL, interval}
 }
 
-export function updateMonitorInterval(interval) {
-    return {type: UPDATE_MONITOR_INTERVAL, interval}
+export function updateEnvMonitorInterval(interval) {
+    return {type: UPDATE_ENV_MONITOR_INTERVAL, interval}
 }
 
-export function setMonitorMemory(memory) {
-    return {type: SET_MONITOR_MEMORY, memory}
+export function setEnvMonitorMemory(memory) {
+    return {type: SET_ENV_MONITOR_MEMORY, memory}
+}
+
+export function setTipMonitorInterval(interval) {
+    return {type: SET_TIP_MONITOR_INTERVAL, interval}
+}
+
+export function updateTipMonitorInterval(interval) {
+    return {type: UPDATE_TIP_MONITOR_INTERVAL, interval}
+}
+
+export function setTipMonitorMemory(memory) {
+    return {type: SET_TIP_MONITOR_MEMORY, memory}
 }
 
 export function addLogMessage(log) {

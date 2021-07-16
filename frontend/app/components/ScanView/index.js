@@ -20,6 +20,16 @@ function val2color(val, min, max) {
   return colorGradient.getColor((val-min)/(max-min)*255 + 1)
 }
 
+function formatCurrentString(val, precision) {
+  if (Math.abs(val) > 1e-6)
+    return (val*1e6).toFixed(precision) + " uA"
+  else if (Math.abs(val) > 1e-9)
+    return (val*1e9).toFixed(precision) + " nA"
+  else if (Math.abs(val) > 1e-12)
+    return (val*1e12).toFixed(precision) + " pA"
+  else
+    return (val*1e15).toFixed(precision) + " fA"
+}
 
 var voronoi = new Voronoi();
 var diagram;
@@ -120,25 +130,21 @@ function ScanView(props) {
     canvas.height = size.height
     const ctx = canvas.getContext('2d')
 
-    const scale= size.height / props.scanRange.y * (1+zoom*ZOOM_STEP)
+    const scale= size.height / props.scanRange.y * (Math.exp(1+zoom*ZOOM_STEP))
+
+    ctx.save()
 
     // Set drawing to center of canvas
     ctx.translate(size.width/2, size.height/2)
-
     // Handle pan translation
     ctx.translate(pan.x, pan.y)
 
-
     ctx.save();
-
     var bbox = {xl: -props.scanRange.x/2, xr: props.scanRange.x/2, yt: -props.scanRange.y/2, yb: props.scanRange.y/2};
     var sites = props.scanResult.points
 
-    console.time("voronoi")
     diagram = voronoi.recycle(diagram)
     diagram = voronoi.compute(sites, bbox);
-    console.timeEnd("voronoi")
-    console.log(diagram);
 
 		var cells = diagram.cells,
 			iCell = cells.length,
@@ -185,16 +191,15 @@ function ScanView(props) {
       ctx.rect(-props.boundingBoxSize.x*scale/2, -props.boundingBoxSize.y*scale/2, props.boundingBoxSize.x*scale, props.boundingBoxSize.y*scale)
       ctx.fill()
       ctx.stroke()
-      ctx.rotate(-props.boundingBoxRotation*Math.PI/180)
-      ctx.translate(-props.boundingBoxPosition.x*scale, props.boundingBoxPosition.y*scale)
-      ctx.setLineDash([]);
 
-      ctx.restore();
+      ctx.restore()
     }
 
 
     if (props.isPatternUploaded && !props.isScanResultUpToDate) {
       // Draw pattern lines
+
+      ctx.save();
       let path = new Path2D();
       props.patternPoints.forEach((item, i) => {
         if (i == 0)
@@ -211,6 +216,8 @@ function ScanView(props) {
         ctx.arc(item[0]*scale, -item[1]*scale, 2, 0, 2*Math.PI);
         ctx.fill()
       });
+
+      ctx.restore()
     }
 
     // Draw grid
@@ -233,11 +240,14 @@ function ScanView(props) {
     ctx.restore();
 
     // Draw maximum scan range
+    ctx.save();
     ctx.beginPath();
     ctx.rect(-props.scanRange.x/2*scale, -props.scanRange.y/2*scale, props.scanRange.x*scale, props.scanRange.y*scale)
     ctx.stroke()
+    ctx.restore();
 
     // Draw tip position cursor
+    ctx.save();
     ctx.translate(props.currentPosition.x*scale, -props.currentPosition.y*scale)
     ctx.beginPath();
     ctx.arc(0, 0, 5, 0, 2*Math.PI);
@@ -252,7 +262,62 @@ function ScanView(props) {
     ctx.moveTo(0, -8);
     ctx.lineTo(0, 8);
     ctx.stroke();
-    ctx.translate(-props.currentPosition.x*scale, props.currentPosition.y*scale)
+    ctx.restore();
+
+
+    ctx.restore()
+
+    // Draw color gradient
+    const colorbarHeight = 200
+    const colorbarWidth = 20
+    const colorbarLabelCnt = 4
+    const colorbarFontHeight = 12
+    const colorbarMargin = colorbarFontHeight
+    const colorbarTextMargin = 70
+
+    ctx.save()
+    ctx.translate(size.width-colorbarWidth-colorbarMargin-1, colorbarMargin+1)
+
+    ctx.strokeStyle = "black"
+    ctx.fillStyle = "white"
+    ctx.rect(-colorbarTextMargin, -colorbarMargin, colorbarTextMargin+colorbarWidth+colorbarMargin, colorbarHeight+3*colorbarMargin)
+    ctx.fill()
+    ctx.stroke()
+
+    let grd = ctx.createLinearGradient(0, colorbarHeight, 0, 0);
+    grd.addColorStop(0, color1);
+    grd.addColorStop(0.33, color2);
+    grd.addColorStop(0.66, color3);
+    grd.addColorStop(1, color4);
+
+    ctx.beginPath();
+    ctx.rect(0, 0, colorbarWidth, colorbarHeight)
+
+    ctx.fillStyle = grd;
+    ctx.fill()
+    ctx.stroke()
+
+    ctx.font = colorbarFontHeight + "px Arial";
+    ctx.fillStyle = "black"
+    ctx.textAlign = "right";
+
+    let delta = props.scanResult.statistics.adc.max - props.scanResult.statistics.adc.min
+
+    for (var i = 0; i < colorbarLabelCnt; i++) {
+      let y = colorbarHeight*i/(colorbarLabelCnt-1)
+      ctx.beginPath();
+      ctx.moveTo(-5, y);
+      ctx.lineTo(0, y);
+      ctx.stroke();
+
+      let val = delta - delta*i/(colorbarLabelCnt-1)
+
+      ctx.fillText(formatCurrentString(val, 2), -5, y+colorbarFontHeight/2);
+    }
+
+    ctx.textAlign = "right";
+    ctx.fillText(formatCurrentString(props.scanResult.statistics.adc.min, 4), colorbarWidth, colorbarHeight+colorbarFontHeight+5);
+    ctx.restore()
 
   }, [props.patternPoints, size, props.boundingBoxSize, props.boundingBoxPosition, props.boundingBoxRotation, zoom, pan, props.scanResult, props.isPatternUploaded, props.isScanResultUpToDate]) //, props.currentPosition])
 
@@ -270,7 +335,6 @@ function ScanView(props) {
       </ControlWrapper>
       <ResizableCancas ref={canvasRef}/>
       <ProgressWrapper>
-
         <Transition visible={props.scanResult.running} animation='scale' duration={500}>
           <Progress percent={Math.round(props.scanResult.progress)} progress success={props.scanResult.finished}/>
         </Transition>

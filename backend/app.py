@@ -10,7 +10,7 @@ from pystm import STM, PatternGen
 import numpy as np
 
 
-class MonitorThread(Thread):
+class EnvMonitorThread(Thread):
     def __init__(self, stm):
         Thread.__init__(self)
         self.stm = stm
@@ -37,12 +37,17 @@ class TipMonitorThread(Thread):
         Thread.__init__(self)
         self.stm = stm
 
+        self.interval = 1
+
+    def set_interval(self, interval):
+        self.interval = interval
+
+    def get_interval(self):
+        return self.interval
+
     def run(self):
         while(1):
-            sleep(1)
-            # socketio.emit("pid_enabled", random()>0.5, broadcast=True)
-            # socketio.emit("scan_enabled", random()>0.5, broadcast=True)
-            # socketio.emit("is_tunneling", random()>0.5, broadcast=True)
+            sleep(self.interval)
             socketio.emit("tip_monitor_update", {
                 "time": time_ns(),
                 "current": stm.get_tip_current(),
@@ -127,7 +132,7 @@ class ScanThread(Thread):
                         "adc": buf["adc"][i],
                         "z": buf["z"][i]
                     })
-                    
+
                 read_points = read_points + read_cnt
 
                 # Calc statistics
@@ -186,13 +191,20 @@ pattern_options = {
             "points_per_turn": {"name": "Points per Turn", "type": "integer", "default": 10, "min": 1}
         }
     },
+    "point": {
+        "name": "Point",
+        "parameters": {
+            "n_points": {"name": "N. Points", "type": "integer", "default": 100, "min": 1},
+        }
+    },
 }
 
 pattern_factories = {
     "triangle": PatternGen.triangle,
     "sine": PatternGen.sine,
     "cosine": PatternGen.cosine,
-    "spiral": PatternGen.spiral
+    "spiral": PatternGen.spiral,
+    "point": PatternGen.point,
 }
 
 app = Flask(__name__)
@@ -200,7 +212,8 @@ app.config["SECRET_KEY"] = "secret!"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 def send_full_update(emit):
-    emit("update_monitor_interval", monitor_thread.get_interval())
+    emit("update_env_monitor_interval", env_monitor_thread.get_interval())
+    emit("update_tip_monitor_interval", env_monitor_thread.get_interval())
     emit("update_pid_enabled", stm.get_pid_enable())
     emit("update_pid_p", stm.get_pid_p())
     emit("update_pid_i", stm.get_pid_i())
@@ -223,13 +236,21 @@ def test_connect():
 def test_disconnect():
     print("Client disconnected")
 
-@socketio.on("set_monitor_interval")
+@socketio.on("set_env_monitor_interval")
 def set_monitor_interval(interval):
     if (interval <= 0.0):
         emit("log", {"time": time(), "severity": "error", "msg": "Monitor interval cannot be negative or 0"})
     else:
-        monitor_thread.set_interval(interval)
-    emit("update_monitor_interval", monitor_thread.get_interval())
+        env_monitor_thread.set_interval(interval)
+    emit("update_env_monitor_interval", env_monitor_thread.get_interval())
+
+@socketio.on("set_tip_monitor_interval")
+def set_monitor_interval(interval):
+    if (interval <= 0.0):
+        emit("log", {"time": time(), "severity": "error", "msg": "Tip monitor interval cannot be negative or 0"})
+    else:
+        tip_monitor_thread.set_interval(interval)
+    emit("update_tip_monitor_interval", tip_monitor_thread.get_interval())
 
 @socketio.on("toggle_pid_enable")
 def toggle_pid_enable():
@@ -238,7 +259,6 @@ def toggle_pid_enable():
 
 @socketio.on("set_pid_p")
 def set_pid_p(value):
-    print(value)
     stm.set_pid_p(value)
     emit("update_pid_p", stm.get_pid_p())
 
@@ -301,9 +321,10 @@ def enable_scan(enable):
 stm = STM()
 stm.set_scan_enable(False)
 stm.set_pid_enable(False)
+stm.set_adc_averages(1)
 
-monitor_thread = MonitorThread(stm)
-monitor_thread.start()
+env_monitor_thread = EnvMonitorThread(stm)
+env_monitor_thread.start()
 
 tip_monitor_thread = TipMonitorThread(stm)
 tip_monitor_thread.start()

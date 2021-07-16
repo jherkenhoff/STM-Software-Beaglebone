@@ -47,9 +47,10 @@ int32_t read_adc_value() {
 	// Convert the 18 bit adc value to a signed 32 bit value (https://en.wikipedia.org/wiki/Sign_extension)
 	// If the sign bit (bit 17) is set, we need to pad the 32 word with ones on the left side:
 	if (value & (1<<17))
-		return ~((1<<18)-1) | value;
-	else
-		return value;
+	  value = ~((1<<18)-1) | value;
+
+  // Invert the sign, since the tunneling amplifier is inverting
+	return -value;
 }
 
 void adc_trigger_conv() {

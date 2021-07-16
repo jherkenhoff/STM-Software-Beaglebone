@@ -32,7 +32,7 @@ TARGET_PRU1=$(BUILD_DIR)/stm-pru1.out
 TARGETS=$(TARGET_PRU0) $(TARGET_PRU1)
 
 OBJECTS_PRU0=$(BUILD_DIR)/stm-pru0.o
-OBJECTS_PRU1=$(BUILD_DIR)/stm-pru1.o
+OBJECTS_PRU1=$(BUILD_DIR)/stm-pru1.o $(BUILD_DIR)/fix16.o $(BUILD_DIR)/fix16_exp.o
 
 all: build
 
