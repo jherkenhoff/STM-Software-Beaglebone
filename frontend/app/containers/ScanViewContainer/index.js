@@ -14,12 +14,13 @@ function ScanViewContainer(props) {
     <DashboardCard title="Scan View">
       <ScanView
         patternPoints={props.patternPoints}
+        voronoi={props.voronoi}
         boundingBoxSize={props.boundingBoxSize}
         boundingBoxPosition={props.boundingBoxPosition}
         boundingBoxRotation={props.boundingBoxRotation}
         scanRange={props.scanRange}
+        scanStatistics={props.scanStatistics}
         currentPosition={props.currentPosition}
-        scanResult={props.scanResult}
         isPatternUploaded={props.isPatternUploaded}
         isScanResultUpToDate={props.isScanResultUpToDate}
       />
@@ -31,12 +32,13 @@ function ScanViewContainer(props) {
 function mapStateToProps(state) {
   return {
     patternPoints: state.scan.patternPoints,
+    voronoi: state.scan.scanView.voronoi,
     boundingBoxSize: state.scan.boundingBox.size,
     boundingBoxPosition: state.scan.boundingBox.position,
     boundingBoxRotation: state.scan.boundingBox.rotation,
     scanRange: state.scan.scanRange,
+    scanStatistics: state.scan.scanResult.statistics,
     currentPosition: {x: state.tipMonitor.x, y: state.tipMonitor.y},
-    scanResult: state.scan.scanResult,
     isScanResultUpToDate: state.scan.isScanResultUpToDate,
     isPatternUploaded: state.scan.isPatternUploaded
   }

@@ -58,7 +58,6 @@ export const SET_SCAN_ENABLED = "SET_SCAN_ENABLED"
 
 export const UPDATE_SCAN_RESULT = "UPDATE_SCAN_RESULT"
 
-
 export function socketConnectionChanged(state) {
   return {type: SOCKET_CONNECTION_CHANGED, state}
 }

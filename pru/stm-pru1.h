@@ -35,6 +35,15 @@ struct arm_pru1_share {
 
    int32_t stepper_steps;
 
+   uint32_t auto_approach_enable;
+   int32_t auto_approach_stepper_inc;
+   int32_t auto_approach_z_inc;
+   int32_t auto_approach_z_low;
+   int32_t auto_approach_z_high;
+   int32_t auto_approach_z_goal;
+   int32_t auto_approach_current_goal;
+   uint32_t auto_approach_iteration;
+
    CircularBufferContext pattern_buffer_ctx;
    void *pattern_buffer;
 

@@ -16,6 +16,10 @@ function OsciPlotContainer(props) {
   );
 }
 
+
+  //<OciPlot scanPoints={props.scanPoints}/>
+  //Disabled in OsciPlotContainer
+
 function mapStateToProps(state) {
   return {
     scanPoints: state.scan.scanResult.points,

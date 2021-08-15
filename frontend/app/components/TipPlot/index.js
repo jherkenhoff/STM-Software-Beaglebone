@@ -23,6 +23,11 @@ function TipPlot(props) {
     stroke: {
       width: 2
     },
+    legend: {
+      position: "top",
+      horizontalAlign: 'right',
+      floating: true
+    },
     xaxis: {
       type: "datetime",
       labels: {
@@ -79,7 +84,7 @@ function TipPlot(props) {
       series={tipCurrentSeries}
       type="line"
       width="100%"
-      height="200px"
+      height="100%"
     />
   );
 }

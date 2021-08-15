@@ -12,6 +12,11 @@ import {
   UPDATE_SCAN_RESULT
 } from 'actions'
 
+import {
+  SET_VORONOI_RENDER_RESULTS,
+  SET_VORONOI_RENDER_STATUS
+} from 'actions/renderActions'
+
 const initialState = {
   enabled: false,
   patternOptions: {},
@@ -37,6 +42,13 @@ const initialState = {
     running: false,
     finished: false,
     progress: 0
+  },
+  scanView: {
+    voronoi: {
+      computing: false,
+      valid: false,
+      cells: []
+    }
   },
   isScanResultUpToDate: false
 }
@@ -91,6 +103,15 @@ const reducer = (state = initialState, action) =>
       case UPDATE_SCAN_RESULT:
         draft.scanResult = action.scanResult
         draft.isScanResultUpToDate = true
+        draft.scanView.voronoi.valid = false
+        break
+      case SET_VORONOI_RENDER_STATUS:
+        draft.scanView.voronoi.computing = action.computing
+        draft.scanView.voronoi.valid = action.computing? false:draft.scanView.voronoi.valid
+        break
+      case SET_VORONOI_RENDER_RESULTS:
+        draft.scanView.voronoi.cells = action.cells
+        draft.scanView.voronoi.valid = true
         break
 
     }

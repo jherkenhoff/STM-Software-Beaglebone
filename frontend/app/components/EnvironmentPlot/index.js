@@ -60,7 +60,7 @@ function EnvironmentPlot(props) {
       series={tempSeries}
       type="line"
       width="100%"
-      height="150px"
+      height="100%"
     />
   );
 }

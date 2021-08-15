@@ -6,7 +6,6 @@ import styled from 'styled-components';
 
 import { Menu, Segment, Icon, Label } from 'semantic-ui-react'
 
-
 const DashboardCardWrapper = styled.div`
   height: 100%;
   display: flex;

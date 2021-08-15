@@ -87,6 +87,7 @@ ssize_t stm_f_write(struct file *filp, const char *buf, size_t count, loff_t *f_
 	size_t write_cnt;
 	void *pattern_buffer_pos;
 
+
 	if (stmdev->pattern_buffer == NULL) {
 		dev_warn(dev, "Tried to write to pattern buffer, but no memory has been assigned to it\n");
 		return -ENOBUFS;
@@ -104,8 +105,6 @@ ssize_t stm_f_write(struct file *filp, const char *buf, size_t count, loff_t *f_
 		return 0;
 
 	count = min(write_cnt*sizeof(struct pattern_point_s), count);
-
-	dev_info(dev, "Writing %d bytes to pattern buffer\n", count);
 
 	if (copy_from_user(pattern_buffer_pos, buf, count)) {
 		dev_warn(dev, "Could not copy_from_user\n");
@@ -479,6 +478,109 @@ static ssize_t stepper_steps_show(struct device *dev, struct device_attribute *a
 	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->stepper_steps);
 }
 
+static ssize_t auto_approach_enable_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	uint32_t enable;
+	if (kstrtoint(buf, 10, &enable))
+		return -EINVAL;
+	stmdev->arm_pru1_share->auto_approach_enable = (bool)enable;
+	return count;
+}
+
+static ssize_t auto_approach_enable_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->auto_approach_enable);
+}
+
+static ssize_t auto_approach_stepper_inc_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t auto_approach_stepper_inc;
+	if (kstrtoint(buf, 10, &auto_approach_stepper_inc))
+		return -EINVAL;
+	stmdev->arm_pru1_share->auto_approach_stepper_inc = auto_approach_stepper_inc;
+	return count;
+}
+
+static ssize_t auto_approach_stepper_inc_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->auto_approach_stepper_inc);
+}
+
+static ssize_t auto_approach_z_inc_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t auto_approach_z_inc;
+	if (kstrtoint(buf, 10, &auto_approach_z_inc))
+		return -EINVAL;
+	stmdev->arm_pru1_share->auto_approach_z_inc = auto_approach_z_inc;
+	return count;
+}
+
+static ssize_t auto_approach_z_inc_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->auto_approach_z_inc);
+}
+
+static ssize_t auto_approach_z_low_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t auto_approach_z_low;
+	if (kstrtoint(buf, 10, &auto_approach_z_low))
+		return -EINVAL;
+	stmdev->arm_pru1_share->auto_approach_z_low = auto_approach_z_low;
+	return count;
+}
+
+static ssize_t auto_approach_z_low_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->auto_approach_z_low);
+}
+
+static ssize_t auto_approach_z_high_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t auto_approach_z_high;
+	if (kstrtoint(buf, 10, &auto_approach_z_high))
+		return -EINVAL;
+	stmdev->arm_pru1_share->auto_approach_z_high = auto_approach_z_high;
+	return count;
+}
+
+static ssize_t auto_approach_z_high_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->auto_approach_z_high);
+}
+
+static ssize_t auto_approach_z_goal_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t auto_approach_z_goal;
+	if (kstrtoint(buf, 10, &auto_approach_z_goal))
+		return -EINVAL;
+	stmdev->arm_pru1_share->auto_approach_z_goal = auto_approach_z_goal;
+	return count;
+}
+
+static ssize_t auto_approach_z_goal_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->auto_approach_z_goal);
+}
+
+static ssize_t auto_approach_current_goal_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	int32_t auto_approach_current_goal;
+	if (kstrtoint(buf, 10, &auto_approach_current_goal))
+		return -EINVAL;
+	stmdev->arm_pru1_share->auto_approach_current_goal = auto_approach_current_goal;
+	return count;
+}
+
+static ssize_t auto_approach_current_goal_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->auto_approach_current_goal);
+}
+
+static ssize_t auto_approach_iteration_show(struct device *dev, struct device_attribute *attr, char *buf) {
+	struct stm_dev *stmdev = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%d", stmdev->arm_pru1_share->auto_approach_iteration);
+}
+
 // Everyone is allowed to read (0444), but only owner and group are allowed to write (0664)
 static DEVICE_ATTR(adc_averages, 0664, adc_averages_show, adc_averages_store);
 static DEVICE_ATTR(adc_value, 0444, adc_value_show, NULL);
@@ -497,6 +599,14 @@ static DEVICE_ATTR(scan_buffer_size, 0664, scan_buffer_size_show, scan_buffer_si
 static DEVICE_ATTR(scan_buffer_used, 0444, scan_buffer_used_show, NULL);
 static DEVICE_ATTR(bias_voltage, 0664, bias_voltage_show, bias_voltage_store);
 static DEVICE_ATTR(stepper_steps, 0664, stepper_steps_show, stepper_steps_store);
+static DEVICE_ATTR(auto_approach_enable, 0664, auto_approach_enable_show, auto_approach_enable_store);
+static DEVICE_ATTR(auto_approach_stepper_inc, 0664, auto_approach_stepper_inc_show, auto_approach_stepper_inc_store);
+static DEVICE_ATTR(auto_approach_z_inc, 0664, auto_approach_z_inc_show, auto_approach_z_inc_store);
+static DEVICE_ATTR(auto_approach_z_low, 0664, auto_approach_z_low_show, auto_approach_z_low_store);
+static DEVICE_ATTR(auto_approach_z_high, 0664, auto_approach_z_high_show, auto_approach_z_high_store);
+static DEVICE_ATTR(auto_approach_z_goal, 0664, auto_approach_z_goal_show, auto_approach_z_goal_store);
+static DEVICE_ATTR(auto_approach_current_goal, 0664, auto_approach_current_goal_show, auto_approach_current_goal_store);
+static DEVICE_ATTR(auto_approach_iteration, 0444, auto_approach_iteration_show, NULL);
 
 static struct attribute *stm_attributes[] = {
 	&dev_attr_adc_averages.attr,
@@ -516,6 +626,14 @@ static struct attribute *stm_attributes[] = {
 	&dev_attr_scan_buffer_used.attr,
 	&dev_attr_bias_voltage.attr,
 	&dev_attr_stepper_steps.attr,
+	&dev_attr_auto_approach_enable.attr,
+	&dev_attr_auto_approach_stepper_inc.attr,
+	&dev_attr_auto_approach_z_inc.attr,
+	&dev_attr_auto_approach_z_low.attr,
+	&dev_attr_auto_approach_z_high.attr,
+	&dev_attr_auto_approach_z_goal.attr,
+	&dev_attr_auto_approach_current_goal.attr,
+	&dev_attr_auto_approach_iteration.attr,
 	NULL
 };
 

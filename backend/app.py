@@ -25,6 +25,9 @@ class EnvMonitorThread(Thread):
                 "mainboard": stm.get_mainboard_temp(),
                 "supply": stm.get_supply_temp()
                 }, broadcast=True)
+            socketio.emit("update_auto_approach_iteration", stm.get_auto_approach_iteration(), broadcast=True)
+            socketio.emit("update_auto_approach_enable", stm.get_auto_approach_enable(), broadcast=True)
+
 
     def set_interval(self, interval):
         self.interval = interval
@@ -50,11 +53,14 @@ class TipMonitorThread(Thread):
             sleep(self.interval)
             socketio.emit("tip_monitor_update", {
                 "time": time_ns(),
-                "current": stm.get_tip_current(),
-                "x": stm.get_dac_x_voltage(),
-                "y": stm.get_dac_y_voltage(),
-                "z": stm.get_dac_z_voltage(),
+                "current": self.stm.get_tip_current(),
+                "x": self.stm.get_dac_x_voltage(),
+                "y": self.stm.get_dac_y_voltage(),
+                "z": self.stm.get_dac_z_voltage(),
                 }, broadcast=True)
+
+            if stm.get_auto_approach_enable():
+                socketio.emit("update_auto_approach_iteration", stm.get_auto_approach_iteration(), broadcast=True)
 
 
 class ScanThread(Thread):
@@ -71,86 +77,83 @@ class ScanThread(Thread):
         self.start_event.set()
 
     @staticmethod
-    def calc_result_statistic(buf, result_statistics):
-        if result_statistics == None:
-            return {
-                "adc": {
-                    "min": buf["adc"].min(),
-                    "max": buf["adc"].max()
-                },
-                "z": {
-                    "min": buf["z"].min(),
-                    "max": buf["z"].max()
-                }
+    def calc_result_statistic(adc, z):
+        return {
+            "adc": {
+                "min": adc.min(),
+                "max": adc.max()
+            },
+            "z": {
+                "min": z.min(),
+                "max": z.max()
             }
-        else:
-            return {
-                "adc": {
-                    "min": min( result_statistics["adc"]["min"], buf["adc"].min() ),
-                    "max": max( result_statistics["adc"]["max"], buf["adc"].max() )
-                },
-                "z": {
-                    "min": min( result_statistics["z"]["min"], buf["z"].min() ),
-                    "max": max( result_statistics["z"]["max"], buf["z"].max() )
-                }
-            }
-
+        }
 
     def run(self):
-        stm.set_scan_enable(False)
-        stm.set_pattern_buffer_size(1024)
-        stm.set_scan_buffer_size(1024)
+        self.stm.set_scan_enable(False)
+        self.stm.set_pattern_buffer_size(8192)
+        self.stm.set_scan_buffer_size(8192)
 
         # Empty the scan buffer in order to "synchronize" pattern and scan buffer
         while 1:
-            read_cnt, buf = stm.read_scan()
+            read_cnt, buf = self.stm.read_scan()
             if read_cnt == 0:
                 break
 
         while 1:
             self.start_event.wait()
             self.start_event.clear()
-            stm.set_scan_enable(True)
+            self.stm.set_scan_enable(True)
 
             written_points = 0
             read_points = 0
             last_updated_count = 0
-            result_points = []
 
             result_statistics = None
 
-            while len(result_points) != self.pattern.get_point_count():
-                if written_points < self.pattern.get_point_count():
-                    written_points = written_points + stm.write_pattern(self.pattern, written_points)
-                read_cnt, buf = stm.read_scan()
+            adc, z = stm.execute_long_pattern(self.pattern)
 
-                # Add new data to result
-                for i in range(read_cnt):
-                    result_points.append({
-                        "x": self.pattern.x[read_points+i],
-                        "y": self.pattern.y[read_points+i],
-                        "adc": buf["adc"][i],
-                        "z": buf["z"][i]
-                    })
+            print("Pattern execute finished")
 
-                read_points = read_points + read_cnt
+            # # Add new data to result
+            # for i in range(read_cnt):
+            #     result_points.append({
+            #         "x": self.pattern.x[read_points+i],
+            #         "y": self.pattern.y[read_points+i],
+            #         "adc": buf["adc"][i],
+            #         "z": buf["z"][i]
+            #     })
 
-                # Calc statistics
-                if read_cnt > 0:
-                    result_statistics = self.calc_result_statistic(buf, result_statistics)
+            # # Calc statistics
+            # if read_cnt > 0:
+            #     result_statistics = self.calc_result_statistic(buf, result_statistics)
 
-                # Only send data every 30 new points
-                if len(result_points) > last_updated_count + 30:
-                    socketio.emit("update_scan_result", {
-                        "points": result_points,
-                        "statistics": result_statistics,
-                        "running": True,
-                        "progress": len(result_points) / self.pattern.get_point_count() * 100,
-                        "finished": False
-                    })
-                    last_updated_count = len(result_points)
+            # # Only send data every 30 new points
+            # if len(result_points) > last_updated_count + 30:
+            #     socketio.emit("update_scan_result", {
+            #         "points": result_points,
+            #         "statistics": result_statistics,
+            #         "running": True,
+            #         "progress": len(result_points) / self.pattern.get_point_count() * 100,
+            #         "finished": False
+            #     })
+            #     last_updated_count = len(result_points)
 
-            stm.set_scan_enable(False)
+            self.stm.set_scan_enable(False)
+
+            result_points = []
+            for i in range(self.pattern.get_point_count()):
+                result_points.append({
+                    "x": self.pattern.x[i],
+                    "y": self.pattern.y[i],
+                    "adc": adc[i],
+                    "z": z[i]
+                })
+
+            print("result_points ready")
+
+            result_statistics = self.calc_result_statistic(adc, z)
+            print("Statistics ready")
 
             socketio.emit("update_scan_result", {
                 "points": result_points,
@@ -159,7 +162,8 @@ class ScanThread(Thread):
                 "progress": len(result_points) / self.pattern.get_point_count() * 100,
                 "finished": True
             })
-            socketio.emit("update_scan_enabled", stm.get_scan_enable(), broadcast=True)
+            print("Emit finished")
+            socketio.emit("update_scan_enabled", self.stm.get_scan_enable(), broadcast=True)
 
 
 pattern_options = {
@@ -224,6 +228,14 @@ def send_full_update(emit):
     emit("update_z", stm.get_dac_z_voltage())
     emit("update_bias_voltage", stm.get_dac_bias_voltage())
     emit("update_scan_enabled", stm.get_scan_enable())
+    emit("update_auto_approach_enable", stm.get_auto_approach_enable())
+    emit("update_auto_approach_stepper_inc", stm.get_auto_approach_stepper_inc_tip_distance())
+    emit("update_auto_approach_z_inc", stm.get_auto_approach_z_inc_voltage())
+    emit("update_auto_approach_z_low", stm.get_auto_approach_z_low_voltage())
+    emit("update_auto_approach_z_high", stm.get_auto_approach_z_high_voltage())
+    emit("update_auto_approach_z_goal", stm.get_auto_approach_z_goal_voltage())
+    emit("update_auto_approach_current_goal", stm.get_auto_approach_current_goal())
+    emit("update_auto_approach_iteration", stm.get_auto_approach_iteration())
 
 @socketio.on("connect")
 def test_connect():
@@ -303,6 +315,7 @@ def set_bias_voltage(value):
 
 @socketio.on("upload_scan_pattern")
 def upload_scan_pattern(value):
+    print("Setting pattern")
     pattern = pattern_factories[value["pattern"]](**value["parameters"])
     pattern = pattern.scale(**value["size"])
     pattern = pattern.rotate(value["rotation"])
@@ -317,6 +330,41 @@ def enable_scan(enable):
     else:
         stm.set_scan_enable(False)
     emit("update_scan_enabled", stm.get_scan_enable())
+
+@socketio.on("set_auto_approach_enable")
+def set_auto_approach_enable(enable):
+    stm.set_auto_approach_enable(enable)
+    emit("update_auto_approach_enable", stm.get_auto_approach_enable())
+
+@socketio.on("set_auto_approach_stepper_inc")
+def set_auto_approach_stepper_inc(distance):
+    stm.set_auto_approach_stepper_inc_tip_distance(distance)
+    emit("update_auto_approach_stepper_inc", stm.get_auto_approach_stepper_inc_tip_distance())
+
+@socketio.on("set_auto_approach_z_inc")
+def set_auto_approach_z_inc(z):
+    stm.set_auto_approach_z_inc_voltage(z)
+    emit("update_auto_approach_z_inc", stm.get_auto_approach_z_inc_voltage())
+
+@socketio.on("set_auto_approach_z_low")
+def set_auto_approach_z_low(z):
+    stm.set_auto_approach_z_low_voltage(z)
+    emit("update_auto_approach_z_low", stm.get_auto_approach_z_low_voltage())
+
+@socketio.on("set_auto_approach_z_high")
+def set_auto_approach_z_high(z):
+    stm.set_auto_approach_z_high_voltage(z)
+    emit("update_auto_approach_z_high", stm.get_auto_approach_z_high_voltage())
+
+@socketio.on("set_auto_approach_z_goal")
+def set_auto_approach_z_goal(z):
+    stm.set_auto_approach_z_goal_voltage(z)
+    emit("update_auto_approach_z_goal", stm.get_auto_approach_z_goal_voltage())
+
+@socketio.on("set_auto_approach_current_goal")
+def set_auto_approach_current_goal(current):
+    stm.set_auto_approach_current_goal(current)
+    emit("update_auto_approach_current_goal", stm.get_auto_approach_current_goal())
 
 stm = STM()
 stm.set_scan_enable(False)

@@ -11,15 +11,19 @@ import { connect } from 'react-redux'
 
 import GridLayout, { Responsive as ResponsiveGridLayout, WidthProvider } from 'react-grid-layout';
 
-import ScanWindow from 'components/ScanWindow';
+
+import {
+  updateWorkspaceLayouts
+} from 'actions/workspaceActions'
+
+import widgetList from 'workspaceProvider/widgetList'
+
 import CircularGauge from 'components/CircularGauge';
-import PlotWindow from 'components/PlotWindow';
-import DashboardCard from 'components/DashboardCard';
 import LogContainer from 'containers/LogContainer';
 import EnvironmentPlotContainer from 'containers/EnvironmentPlotContainer';
 import TipPlotContainer from 'containers/TipPlotContainer';
 import PidSettingsContainer from 'containers/PidSettingsContainer';
-import DataViewContainer from 'containers/DataViewContainer';
+import AutoApproachContainer from 'containers/AutoApproachContainer';
 import ManualPositionContainer from 'containers/ManualPositionContainer';
 import CoarseApproachContainer from 'containers/CoarseApproachContainer';
 import BiasVoltageContainer from 'containers/BiasVoltageContainer';
@@ -33,42 +37,73 @@ import { Grid, Divider, Icon, Header, Segment } from 'semantic-ui-react'
 const ResizeableGridLayout = WidthProvider(ResponsiveGridLayout);
 
 function Dashboard(props) {
-  const layouts = {
-    lg: [
-      {w: 5, h: 3, x: 7, y: 6, i: "env-plot"},
-      {w: 3, h: 3, x: 9, y: 0, i: "log"},
-      {w: 7, h: 3, x: 0, y: 6, i: "tip-plot"},
-      {w: 3, h: 2, x: 9, y: 3, i: "pid-settings"},
-      {w: 2, h: 2, x: 7, y: 4, i: "manual-position", minW: 2, minH: 2},
-      {w: 1, h: 1, x: 7, y: 1, i: "current-gauge", isResizable: false},
-      {w: 1, h: 1, x: 8, y: 1, i: "z-gauge", isResizable: false},
-      {w: 2, h: 2, x: 7, y: 2, i: "coarse-approach"},
-      {w: 1, h: 1, x: 7, y: 0, i: "mainboard-temperature-gauge", isResizable: false},
-      {w: 1, h: 1, x: 8, y: 0, i: "supply-temperature-gauge", isResizable: false},
-      {w: 3, h: 1, x: 9, y: 5, i: "bias-voltage", minW: 2, maxH: 1},
-      {w: 2, h: 6, x: 0, y: 0, i: "scan-setup", minW: 2, minH: 5},
-      {w: 5, h: 6, x: 2, y: 0, i: "scan-view", minW: 2, minH: 2},
-    ],
-    md: [
-      {i: "tip-plot", x: 0, y:0, w: 7, h:3},
-      {i: "log", x: 7, y:0, w: 3, h:3},
-      {i: "env-plot", x: 0, y:2, w: 3, h:3},
-      {i: "current-gauge", x: 3, y:2, w: 1, h: 1, isResizable: false},
-      {i: "z-gauge", x: 4, y:2, w: 1, h: 1, isResizable: false},
-      {i: "mainboard-temperature-gauge", x: 3, y: 3, w: 1, h: 1, isResizable: false},
-      {i: "supply-temperature-gauge", x: 4, y: 3, w: 1, h: 1, isResizable: false},
-      {i: "coarse-approach", x: 5, y:2, w: 2, h:2},
-      {i: "pid-settings", x: 7, y:2, w: 3, h:2},
-      {i: "manual-position", x: 3, y:4, w: 2, h: 2, minW:2, minH:2},
-      {i: "bias-voltage", x: 5, y:4, w: 2, h:1, minW: 2, maxH: 1},
-      {w: 2, h: 5, x: 8, y: 4, i: "scan-setup", minW: 2, minH: 5},
-      {w: 5, h: 4, x: 8, y: 4, i: "scan-view", minW: 2, minH: 2},
-    ]
-  };
+
+  if (props.workspaces.length == 0) {
+    return <div> No Workspace </div>
+  }
+
+  const activeWorkspace = props.workspaces[props.activeWorkspace]
+
+  if (activeWorkspace.widgets.length == 0) {
+    return <div> Empty workspace </div>
+  }
 
   return (
     <ResizeableGridLayout
-      layouts={layouts}
+      layouts={activeWorkspace.layouts}
+      rowHeight={110}
+      draggableHandle=".drag-handle"
+      breakpoints={{lg: 1400, md: 996, sm: 768, xs: 480, xxs: 0}}
+      cols={{lg: 12, md: 10, sm: 6, xs: 4, xxs: 2}}
+      onLayoutChange={(layout, layouts) => props.updateWorkspaceLayouts(layouts)}
+    >
+      {activeWorkspace.widgets.map( (widget) => (
+        <div key={widget.key}>
+          {widgetList.find( (widgetListEntry) => (widgetListEntry.widgetType == widget.widgetType)).component}
+        </div>
+      ))}
+    </ResizeableGridLayout>
+  );
+
+  //
+  // const layouts = {
+  //   lg: [
+  //     {w: 5, h: 3, x: 7, y: 6, i: "env-plot"},
+  //     {w: 3, h: 3, x: 9, y: 0, i: "log"},
+  //     {w: 7, h: 3, x: 0, y: 6, i: "tip-plot"},
+  //     {w: 3, h: 2, x: 9, y: 3, i: "pid-settings"},
+  //     {i: "auto-approach", x: 7, y:2, w: 3, h:2},
+  //     {w: 2, h: 2, x: 7, y: 4, i: "manual-position", minW: 2, minH: 2},
+  //     {w: 1, h: 1, x: 7, y: 1, i: "current-gauge", isResizable: false},
+  //     {w: 1, h: 1, x: 8, y: 1, i: "z-gauge", isResizable: false},
+  //     {w: 2, h: 2, x: 7, y: 2, i: "coarse-approach"},
+  //     {w: 1, h: 1, x: 7, y: 0, i: "mainboard-temperature-gauge", isResizable: false},
+  //     {w: 1, h: 1, x: 8, y: 0, i: "supply-temperature-gauge", isResizable: false},
+  //     {w: 3, h: 1, x: 9, y: 5, i: "bias-voltage", minW: 2, maxH: 1},
+  //     {w: 2, h: 6, x: 0, y: 0, i: "scan-setup", minW: 2, minH: 5},
+  //     {w: 5, h: 6, x: 2, y: 0, i: "scan-view", minW: 2, minH: 2},
+  //   ],
+  //   md: [
+  //     {i: "tip-plot", x: 0, y:0, w: 7, h:3},
+  //     {i: "log", x: 7, y:0, w: 3, h:3},
+  //     {i: "env-plot", x: 0, y:2, w: 3, h:3},
+  //     {i: "current-gauge", x: 3, y:2, w: 1, h: 1, isResizable: false},
+  //     {i: "z-gauge", x: 4, y:2, w: 1, h: 1, isResizable: false},
+  //     {i: "mainboard-temperature-gauge", x: 3, y: 3, w: 1, h: 1, isResizable: false},
+  //     {i: "supply-temperature-gauge", x: 4, y: 3, w: 1, h: 1, isResizable: false},
+  //     {i: "coarse-approach", x: 5, y:2, w: 2, h:2},
+  //     {i: "pid-settings", x: 7, y:2, w: 3, h:2},
+  //     {i: "auto-approach", x: 7, y:2, w: 3, h:2},
+  //     {i: "manual-position", x: 3, y:4, w: 2, h: 2, minW:2, minH:2},
+  //     {i: "bias-voltage", x: 5, y:4, w: 2, h:1, minW: 2, maxH: 1},
+  //     {w: 2, h: 5, x: 8, y: 4, i: "scan-setup", minW: 2, minH: 5},
+  //     {w: 5, h: 4, x: 8, y: 4, i: "scan-view", minW: 2, minH: 2},
+  //   ]
+  // };
+
+  return (
+    <ResizeableGridLayout
+      layouts={activeWorkspace.layouts}
       rowHeight={110}
       draggableHandle=".drag-handle"
       breakpoints={{lg: 1400, md: 996, sm: 768, xs: 480, xxs: 0}}
@@ -86,6 +121,9 @@ function Dashboard(props) {
       </div>
       <div key="pid-settings">
         <PidSettingsContainer />
+      </div>
+      <div key="auto-approach">
+        <AutoApproachContainer />
       </div>
       <div key="manual-position">
         <ManualPositionContainer />
@@ -123,6 +161,9 @@ function Dashboard(props) {
 
 function mapStateToProps(state) {
   return {
+    workspaces: state.workspaces.workspaces,
+    activeWorkspace: state.workspaces.activeWorkspace,
+
     tipCurrent: state.tipMonitor.current,
     z: state.tipMonitor.z,
     mainboardTemperature: state.monitor.mainboardTemperature,
@@ -132,7 +173,7 @@ function mapStateToProps(state) {
 
 function mapDispatchToProps(dispatch) {
   return {
-    dispatch
+    updateWorkspaceLayouts: (layout) => dispatch(updateWorkspaceLayouts(layout)),
   };
 }
 

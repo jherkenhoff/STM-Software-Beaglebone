@@ -8,23 +8,31 @@ class STM:
     SYSFS_BASE_PATH = "/sys/devices/virtual/misc/stm"
     DEV_FILEPATH    = "/dev/stm"
 
-    SYSFS_ADC_AVERAGES        = join(SYSFS_BASE_PATH, "adc_averages")
-    SYSFS_ADC_VALUE           = join(SYSFS_BASE_PATH, "adc_value")
-    SYSFS_PID_SETPOINT        = join(SYSFS_BASE_PATH, "pid_setpoint")
-    SYSFS_PID_KP              = join(SYSFS_BASE_PATH, "pid_kp")
-    SYSFS_PID_KI              = join(SYSFS_BASE_PATH, "pid_ki")
-    SYSFS_PID_KD              = join(SYSFS_BASE_PATH, "pid_kd")
-    SYSFS_DAC_X               = join(SYSFS_BASE_PATH, "dac_x")
-    SYSFS_DAC_Y               = join(SYSFS_BASE_PATH, "dac_y")
-    SYSFS_DAC_Z               = join(SYSFS_BASE_PATH, "dac_z")
-    SYSFS_SCAN_ENABLE         = join(SYSFS_BASE_PATH, "scan_enable")
-    SYSFS_PID_ENABLE          = join(SYSFS_BASE_PATH, "pid_enable")
-    SYSFS_PATTERN_BUFFER_SIZE = join(SYSFS_BASE_PATH, "pattern_buffer_size")
-    SYSFS_PATTERN_BUFFER_USED = join(SYSFS_BASE_PATH, "pattern_buffer_used")
-    SYSFS_SCAN_BUFFER_SIZE    = join(SYSFS_BASE_PATH, "scan_buffer_size")
-    SYSFS_SCAN_BUFFER_USED    = join(SYSFS_BASE_PATH, "scan_buffer_used")
-    SYSFS_BIAS_VOLTAGE        = join(SYSFS_BASE_PATH, "bias_voltage")
-    SYSFS_STEPPER_STEPS       = join(SYSFS_BASE_PATH, "stepper_steps")
+    SYSFS_ADC_AVERAGES         = join(SYSFS_BASE_PATH, "adc_averages")
+    SYSFS_ADC_VALUE            = join(SYSFS_BASE_PATH, "adc_value")
+    SYSFS_PID_SETPOINT         = join(SYSFS_BASE_PATH, "pid_setpoint")
+    SYSFS_PID_KP               = join(SYSFS_BASE_PATH, "pid_kp")
+    SYSFS_PID_KI               = join(SYSFS_BASE_PATH, "pid_ki")
+    SYSFS_PID_KD               = join(SYSFS_BASE_PATH, "pid_kd")
+    SYSFS_DAC_X                = join(SYSFS_BASE_PATH, "dac_x")
+    SYSFS_DAC_Y                = join(SYSFS_BASE_PATH, "dac_y")
+    SYSFS_DAC_Z                = join(SYSFS_BASE_PATH, "dac_z")
+    SYSFS_SCAN_ENABLE          = join(SYSFS_BASE_PATH, "scan_enable")
+    SYSFS_PID_ENABLE           = join(SYSFS_BASE_PATH, "pid_enable")
+    SYSFS_PATTERN_BUFFER_SIZE  = join(SYSFS_BASE_PATH, "pattern_buffer_size")
+    SYSFS_PATTERN_BUFFER_USED  = join(SYSFS_BASE_PATH, "pattern_buffer_used")
+    SYSFS_SCAN_BUFFER_SIZE     = join(SYSFS_BASE_PATH, "scan_buffer_size")
+    SYSFS_SCAN_BUFFER_USED     = join(SYSFS_BASE_PATH, "scan_buffer_used")
+    SYSFS_BIAS_VOLTAGE         = join(SYSFS_BASE_PATH, "bias_voltage")
+    SYSFS_STEPPER_STEPS        = join(SYSFS_BASE_PATH, "stepper_steps")
+    SYSFS_AUTO_APPROACH_ENABLE       = join(SYSFS_BASE_PATH, "auto_approach_enable")
+    SYSFS_AUTO_APPROACH_STEPPER_INC  = join(SYSFS_BASE_PATH, "auto_approach_stepper_inc")
+    SYSFS_AUTO_APPROACH_Z_INC        = join(SYSFS_BASE_PATH, "auto_approach_z_inc")
+    SYSFS_AUTO_APPROACH_Z_LOW        = join(SYSFS_BASE_PATH, "auto_approach_z_low")
+    SYSFS_AUTO_APPROACH_Z_HIGH       = join(SYSFS_BASE_PATH, "auto_approach_z_high")
+    SYSFS_AUTO_APPROACH_Z_GOAL       = join(SYSFS_BASE_PATH, "auto_approach_z_goal")
+    SYSFS_AUTO_APPROACH_CURRENT_GOAL = join(SYSFS_BASE_PATH, "auto_approach_current_goal")
+    SYSFS_AUTO_APPROACH_ITERATION    = join(SYSFS_BASE_PATH, "auto_approach_iteration")
 
     F_CLK = 200e6
 
@@ -98,12 +106,12 @@ class STM:
         kp = kp * factor
 
         with open(self.SYSFS_PID_KP, "r+") as f:
-            f.write(str(int(kp*2**32)))
+            f.write(str(int(kp)))
 
     def get_pid_p(self):
         factor = self.dac_voltage2dac_raw(1) / self.adc_voltage2adc_raw(self.tip_current2adc_voltage(1))
         with open(self.SYSFS_PID_KP, "r") as f:
-            return int(f.read())/2**32 / factor
+            return int(f.read()) / factor
 
     def set_pid_i(self, ki):
         factor = self.dac_voltage2dac_raw(1) / self.adc_voltage2adc_raw(self.tip_current2adc_voltage(1)) / self.F_CLK
@@ -238,6 +246,45 @@ class STM:
         written_bytes = os.write(self.dev_file, raw_pattern)
         return int(written_bytes/8) # Return number of samples written to the buffer (one sample = 8 bytes)
 
+    def sync_buffers(self):
+        # Sync read and write buffers (scan and pattern buffer)
+        while 1:
+            points_read, buf = self.read_scan()
+            if points_read == 0:
+                break
+
+
+    def execute_long_pattern(self, pattern, progress_frequency=0, progress_callback=None, new_data_frequency=0, new_data_callback=None):
+        # Preprocess pattern
+        point_cnt = pattern.get_point_count()
+        x = pattern.x.clip(-self.DAC_REF, self.DAC_REF)
+        y = pattern.y.clip(-self.DAC_REF, self.DAC_REF)
+        raw_pattern = np.empty((point_cnt, 2), dtype="int32")
+        raw_pattern[:,0] = self.dac_voltage2dac_raw(x)
+        raw_pattern[:,1] = self.dac_voltage2dac_raw(y)
+
+        read_buffer_size = self.get_scan_buffer_size()
+
+        write_cnt = 0
+
+        read_buffer = bytearray()
+
+        self.sync_buffers()
+
+        while len(read_buffer)/8 < point_cnt:
+            if write_cnt < point_cnt:
+                written_bytes = os.write(self.dev_file, raw_pattern[write_cnt:])
+                write_cnt += int(written_bytes/8)
+
+            read_buffer += os.read(self.dev_file, read_buffer_size*8)
+
+        # Preprocess data
+        array = np.frombuffer(read_buffer, dtype="int32")
+        adc = self.adc_voltage2tip_current(self.adc_raw2adc_voltage(array[0::2]))
+        z = self.dac_raw2dac_voltage(array[1::2])
+
+        return adc, z
+
     def read_scan(self):
         raw = os.read(self.dev_file, 512) # TODO: Replace max read count with something sensible
         array = np.frombuffer(raw, dtype="int32")
@@ -263,9 +310,16 @@ class STM:
     def angle2steps(self, angle):
         return angle/self.STEPPER_STEP_ANGLE * self.STEPPER_U_STEPS * self.STEPPER_GEAR_RATIO
 
+    def steps2angle(self, steps):
+        return steps * self.STEPPER_STEP_ANGLE / self.STEPPER_U_STEPS / self.STEPPER_GEAR_RATIO
+
     def tip_movement2stepper_angle(self, distance):
         # distance in m
         return distance/self.STEPPER_LEVER_RATIO / self.STEPPER_SCREW_PITCH * 360
+
+    def stepper_angle2tip_movement(self, angle):
+        # angle in degrees (0 to 360)
+        return angle*self.STEPPER_LEVER_RATIO * self.STEPPER_SCREW_PITCH / 360
 
     def move_stepper_tip_distance(self, distance):
         self.move_stepper(self.angle2steps(self.tip_movement2stepper_angle(distance)))
@@ -273,3 +327,100 @@ class STM:
     def stepper_move_finished(self):
         with open(self.SYSFS_STEPPER_STEPS, "r") as f:
             return int(f.read()) == 0
+
+    def set_auto_approach_enable(self, enable):
+        assert enable in [0, 1, False, True]
+        with open(self.SYSFS_AUTO_APPROACH_ENABLE, "r+") as f:
+            f.write(str(int(enable)))
+
+    def get_auto_approach_enable(self):
+        with open(self.SYSFS_AUTO_APPROACH_ENABLE, "r") as f:
+            return bool(int(f.read()))
+
+    def set_auto_approach_stepper_inc(self, stepper_inc):
+        with open(self.SYSFS_AUTO_APPROACH_STEPPER_INC, "r+") as f:
+            f.write(str(int(stepper_inc)))
+
+    def get_auto_approach_stepper_inc(self):
+        with open(self.SYSFS_AUTO_APPROACH_STEPPER_INC, "r") as f:
+            return int(f.read())
+
+    def set_auto_approach_stepper_inc_tip_distance(self, distance):
+        self.set_auto_approach_stepper_inc(self.angle2steps(self.tip_movement2stepper_angle(distance)))
+
+    def get_auto_approach_stepper_inc_tip_distance(self):
+        return self.stepper_angle2tip_movement(self.steps2angle(self.get_auto_approach_stepper_inc()))
+
+    def set_auto_approach_z_inc(self, z_inc):
+        with open(self.SYSFS_AUTO_APPROACH_Z_INC, "r+") as f:
+            f.write(str(int(z_inc)))
+
+    def get_auto_approach_z_inc(self):
+        with open(self.SYSFS_AUTO_APPROACH_Z_INC, "r") as f:
+            return int(f.read())
+
+    def set_auto_approach_z_inc_voltage(self, voltage):
+        self.set_auto_approach_z_inc(self.dac_voltage2dac_raw(voltage))
+
+    def get_auto_approach_z_inc_voltage(self):
+        return self.dac_raw2dac_voltage(self.get_auto_approach_z_inc())
+
+    def set_auto_approach_z_low(self, z_low):
+        with open(self.SYSFS_AUTO_APPROACH_Z_LOW, "r+") as f:
+            f.write(str(int(z_low)))
+
+    def get_auto_approach_z_low(self):
+        with open(self.SYSFS_AUTO_APPROACH_Z_LOW, "r") as f:
+            return int(f.read())
+
+    def set_auto_approach_z_low_voltage(self, voltage):
+        self.set_auto_approach_z_low(self.dac_voltage2dac_raw(voltage))
+
+    def get_auto_approach_z_low_voltage(self):
+        return self.dac_raw2dac_voltage(self.get_auto_approach_z_low())
+
+    def set_auto_approach_z_high(self, z_high):
+        with open(self.SYSFS_AUTO_APPROACH_Z_HIGH, "r+") as f:
+            f.write(str(int(z_high)))
+
+    def get_auto_approach_z_high(self):
+        with open(self.SYSFS_AUTO_APPROACH_Z_HIGH, "r") as f:
+            return int(f.read())
+
+    def set_auto_approach_z_high_voltage(self, voltage):
+        self.set_auto_approach_z_high(self.dac_voltage2dac_raw(voltage))
+
+    def get_auto_approach_z_high_voltage(self):
+        return self.dac_raw2dac_voltage(self.get_auto_approach_z_high())
+
+    def set_auto_approach_z_goal(self, z_goal):
+        with open(self.SYSFS_AUTO_APPROACH_Z_GOAL, "r+") as f:
+            f.write(str(int(z_goal)))
+
+    def get_auto_approach_z_goal(self):
+        with open(self.SYSFS_AUTO_APPROACH_Z_GOAL, "r") as f:
+            return int(f.read())
+
+    def set_auto_approach_z_goal_voltage(self, voltage):
+        self.set_auto_approach_z_goal(self.dac_voltage2dac_raw(voltage))
+
+    def get_auto_approach_z_goal_voltage(self):
+        return self.dac_raw2dac_voltage(self.get_auto_approach_z_goal())
+
+    def set_auto_approach_current_goal_raw(self, current):
+        with open(self.SYSFS_AUTO_APPROACH_CURRENT_GOAL, "r+") as f:
+            f.write(str(int(current)))
+
+    def set_auto_approach_current_goal(self, current):
+        self.set_auto_approach_current_goal_raw(self.adc_voltage2adc_raw(self.tip_current2adc_voltage(current)))
+
+    def get_auto_approach_current_goal_raw(self):
+        with open(self.SYSFS_AUTO_APPROACH_CURRENT_GOAL, "r") as f:
+            return int(f.read())
+
+    def get_auto_approach_current_goal(self):
+        return self.adc_voltage2tip_current(self.adc_raw2adc_voltage(self.get_auto_approach_current_goal_raw()))
+
+    def get_auto_approach_iteration(self):
+        with open(self.SYSFS_AUTO_APPROACH_ITERATION, "r") as f:
+            return int(f.read())

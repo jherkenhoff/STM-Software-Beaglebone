@@ -11,6 +11,8 @@ import pid from './pid'
 import scan from './scan'
 import tipMonitor from './tipMonitor'
 import bias from './bias'
+import autoApproach from './autoApproach'
+import workspaces from './workspaces'
 
 export default combineReducers({
     router: connectRouter(history),
@@ -18,5 +20,7 @@ export default combineReducers({
     pid,
     scan,
     tipMonitor,
-    bias
+    bias,
+    autoApproach,
+    workspaces
   });

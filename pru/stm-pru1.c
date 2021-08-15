@@ -8,6 +8,10 @@ DAC
 
 #define LOOP_DELAY 100
 
+#define AUTO_APPROACH_RETRACT_DELAY 1000 // Num of clk cycles to wait after z retract (before moving the stepper)
+#define AUTO_APPROACH_Z_INC_DELAY 10 // Num of clk_cycles to wait between z increments
+#define AUTO_APPROACH_STEPPER_INC_DELAY 10000 // Num of clk cycles to wait after stepper movement
+
 #define DAC_MAX 131071
 #define DAC_MIN -131072
 
@@ -27,6 +31,8 @@ DAC
 volatile struct arm_pru1_share arm_share __attribute__((location(0))) = {0};
 
 volatile struct pru_pru_share *pru_pru_share = (struct pru_pru_share *) 0x00010000;
+
+int64_t integral = 0;
 
 void dac_write(uint8_t addr, uint32_t value, uint32_t cs_pin) {
 	uint32_t word = (addr<<20) | value;
@@ -104,16 +110,16 @@ int32_t clip_to_dac_range(int32_t value) {
 }
 
 int32_t calc_pid(int32_t error, int32_t k_p, int32_t k_i) {
-		static int64_t i_term = 0;
 		int32_t dt = LOOP_DELAY;
 
-		if (k_i == 0)
-				i_term = 0;
-		else
-				i_term +=  (int64_t)error * (int64_t)dt * k_i;
+		integral +=  (int64_t)k_i*(int64_t)error * (int64_t)dt;
+		//integral = clip_to_dac_range(integral);
 
-		i_term = ((int64_t)clip_to_dac_range(i_term>>32))<<32;
-		return ((int64_t)k_p*(int64_t)error + i_term) >> 32;
+		return ((int64_t)k_p*(int64_t)error + integral)>>32;
+}
+
+void init_pid_integral() {
+	integral = (int64_t)(arm_share.dac_z)<<32;
 }
 
 
@@ -136,6 +142,66 @@ void move_stepper(uint32_t steps, uint32_t direction) {
 		__delay_cycles(10000);
 		SET_PIN(PIN_STEPPER_EN);
 }
+
+void move_stepper_signed(int32_t steps) {
+	if (steps > 0)
+			move_stepper(steps, 1);
+	else if (steps < 0)
+			move_stepper(-steps, 0);
+}
+
+void auto_approach_retract_z() {
+	arm_share.dac_z = clip_to_dac_range(arm_share.auto_approach_z_high);
+	dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
+	update_dacs();
+	__delay_cycles(AUTO_APPROACH_RETRACT_DELAY);
+}
+
+void auto_approach_stepper_inc() {
+	move_stepper_signed(arm_share.auto_approach_stepper_inc);
+	__delay_cycles(AUTO_APPROACH_STEPPER_INC_DELAY);
+	arm_share.auto_approach_iteration += 1;
+}
+
+void auto_approach_z_inc() {
+	arm_share.dac_z = clip_to_dac_range(arm_share.dac_z + arm_share.auto_approach_z_inc);
+	dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
+	update_dacs();
+	__delay_cycles(AUTO_APPROACH_Z_INC_DELAY);
+}
+
+void auto_approach() {
+  int32_t adc_value;
+	arm_share.auto_approach_iteration = 0;
+	auto_approach_retract_z();
+
+	while (arm_share.auto_approach_enable) {
+		adc_value = get_new_adc_sample(pru_pru_share);
+		// Check if desired tunneling current is reached
+		if (adc_value >= arm_share.auto_approach_current_goal) {
+			// If yes, check if it happened at the desired z height
+			if (arm_share.dac_z >= arm_share.auto_approach_z_goal) {
+				// If yes, were done...
+				arm_share.auto_approach_enable = 0;
+			} else {
+				// It seems like we are still not close enough (desired z height not reached)
+				// Lets iterate further...
+				auto_approach_retract_z();
+				auto_approach_stepper_inc();
+			}
+		} else {// Tunneling current goal not yet reached...
+			if (arm_share.dac_z <= clip_to_dac_range(arm_share.auto_approach_z_low)) {
+				// We reached the lower z limit...
+				auto_approach_retract_z();
+				auto_approach_stepper_inc();
+			} else {
+				// Still z travel space to go...
+				auto_approach_z_inc();
+			}
+		}
+	}
+}
+
 
 void main(void) {
 	struct pattern_point_s pattern_point;
@@ -178,10 +244,12 @@ void main(void) {
 
 		// Perform PID calculations and update Z DAC
 		if (arm_share.pid_enable) {
-			for (pid_step = 0; pid_step < arm_share.pid_steps; pid_step++) {
-				error = fix16_log(abs(adc_value)+1) - fix16_log(arm_share.pid_setpoint);
-				arm_share.dac_z = calc_pid(error, arm_share.pid_kp, arm_share.pid_ki);
-			}
+		  //error = (int64_t)(arm_share.pid_setpoint - adc_value);
+			error = fix16_log(abs(adc_value)) - fix16_log(arm_share.pid_setpoint);
+
+			arm_share.dac_z = calc_pid(error, arm_share.pid_kp, arm_share.pid_ki);
+		} else {
+			init_pid_integral();
 		}
 		arm_share.dac_z = clip_to_dac_range(arm_share.dac_z);
 		dac_set_value(arm_share.dac_z, PIN_DAC_CS_Z);
@@ -206,13 +274,15 @@ void main(void) {
 		update_dacs();
 
 		// Move stepper motor
-		if (arm_share.stepper_steps > 0) {
-				move_stepper(arm_share.stepper_steps, 1);
-				arm_share.stepper_steps = 0;
-		} else if (arm_share.stepper_steps < 0) {
-				move_stepper(-arm_share.stepper_steps, 0);
-				arm_share.stepper_steps = 0;
+		if (arm_share.stepper_steps != 0) {
+			move_stepper_signed(arm_share.stepper_steps);
+			arm_share.stepper_steps = 0;
 		}
+
+		// Do auto approach
+		if (arm_share.auto_approach_enable)
+		  auto_approach();
+
 		__delay_cycles(LOOP_DELAY);
 	}
 }

@@ -3,7 +3,6 @@ import PropTypes from "prop-types";
 import styled from 'styled-components';
 import { Button, Icon, Progress, Transition } from 'semantic-ui-react'
 
-import Voronoi from 'voronoi';
 import Gradient from "javascript-color-gradient";
 
 const colorGradient = new Gradient();
@@ -30,9 +29,6 @@ function formatCurrentString(val, precision) {
   else
     return (val*1e15).toFixed(precision) + " fA"
 }
-
-var voronoi = new Voronoi();
-var diagram;
 
 const ResizableCancas = styled.canvas`
   height: 100%;
@@ -124,7 +120,6 @@ function ScanView(props) {
   }, []);
 
   useEffect(() => {
-    console.log("Redraw");
     const canvas = canvasRef.current
     canvas.width = size.width
     canvas.height = size.height
@@ -140,41 +135,38 @@ function ScanView(props) {
     ctx.translate(pan.x, pan.y)
 
     ctx.save();
-    var bbox = {xl: -props.scanRange.x/2, xr: props.scanRange.x/2, yt: -props.scanRange.y/2, yb: props.scanRange.y/2};
-    var sites = props.scanResult.points
 
-    diagram = voronoi.recycle(diagram)
-    diagram = voronoi.compute(sites, bbox);
-
-		var cells = diagram.cells,
-			iCell = cells.length,
-			cell,
-			halfedges, nHalfedges, iHalfedge, v,
-			mustFill;
-		while (iCell--) {
-			cell = cells[iCell];
-			halfedges = cell.halfedges;
-			nHalfedges = halfedges.length;
-			if (nHalfedges) {
-					v = halfedges[0].getStartpoint();
-					ctx.beginPath();
-					ctx.moveTo(v.x*scale, -v.y*scale);
-					for (iHalfedge=0; iHalfedge<nHalfedges; iHalfedge++) {
-						v = halfedges[iHalfedge].getEndpoint();
-						ctx.lineTo(v.x*scale, -v.y*scale);
-						}
-            ctx.strokeStyle = val2color(cell.site.adc, props.scanResult.statistics.adc.min, props.scanResult.statistics.adc.max)
-            ctx.lineWidth = 0.50;
-						ctx.fillStyle = val2color(cell.site.adc, props.scanResult.statistics.adc.min, props.scanResult.statistics.adc.max)
-						ctx.fill();
-            ctx.stroke()
-			}
+    if (props.voronoi.valid) {
+  		var cells = props.voronoi.cells,
+  			iCell = cells.length,
+  			cell,
+  			halfedges, nHalfedges, iHalfedge, v,
+  			mustFill;
+  		while (iCell--) {
+  			cell = cells[iCell];
+  			halfedges = cell.halfedges;
+  			nHalfedges = halfedges.length;
+  			if (nHalfedges) {
+  					v = halfedges[0].getStartpoint();
+  					ctx.beginPath();
+  					ctx.moveTo(v.x*scale, -v.y*scale);
+  					for (iHalfedge=0; iHalfedge<nHalfedges; iHalfedge++) {
+  						v = halfedges[iHalfedge].getEndpoint();
+  						ctx.lineTo(v.x*scale, -v.y*scale);
+  						}
+              ctx.strokeStyle = val2color(cell.site.adc, props.scanStatistics.adc.min, props.scanStatistics.adc.max)
+              ctx.lineWidth = 0.50;
+  						ctx.fillStyle = val2color(cell.site.adc, props.scanStatistics.adc.min, props.scanStatistics.adc.max)
+  						ctx.fill();
+              ctx.stroke()
+  			}
 
       // ctx.fillStyle = '#000000'
       // ctx.beginPath();
       // ctx.rect(cell.site.x*scale-1, -cell.site.y*scale-1, 3, 3)
       // ctx.fill()
     }
+  }
     ctx.restore();
 
 
@@ -197,8 +189,8 @@ function ScanView(props) {
 
 
     if (props.isPatternUploaded && !props.isScanResultUpToDate) {
-      // Draw pattern lines
 
+      // Draw pattern lines
       ctx.save();
       let path = new Path2D();
       props.patternPoints.forEach((item, i) => {
@@ -301,7 +293,7 @@ function ScanView(props) {
     ctx.fillStyle = "black"
     ctx.textAlign = "right";
 
-    let delta = props.scanResult.statistics.adc.max - props.scanResult.statistics.adc.min
+    let delta = props.scanStatistics.adc.max - props.scanStatistics.adc.min
 
     for (var i = 0; i < colorbarLabelCnt; i++) {
       let y = colorbarHeight*i/(colorbarLabelCnt-1)
@@ -316,10 +308,10 @@ function ScanView(props) {
     }
 
     ctx.textAlign = "right";
-    ctx.fillText(formatCurrentString(props.scanResult.statistics.adc.min, 4), colorbarWidth, colorbarHeight+colorbarFontHeight+5);
+    ctx.fillText(formatCurrentString(props.scanStatistics.adc.min, 4), colorbarWidth, colorbarHeight+colorbarFontHeight+5);
     ctx.restore()
 
-  }, [props.patternPoints, size, props.boundingBoxSize, props.boundingBoxPosition, props.boundingBoxRotation, zoom, pan, props.scanResult, props.isPatternUploaded, props.isScanResultUpToDate]) //, props.currentPosition])
+  }, [props.patternPoints, props.voronoi, size, props.boundingBoxSize, props.boundingBoxPosition, props.boundingBoxRotation, zoom, pan, props.scanStatistics, props.isPatternUploaded, props.isScanResultUpToDate]) //, props.currentPosition])
 
   return (
     <Wrapper>
@@ -334,23 +326,26 @@ function ScanView(props) {
       </Button.Group>
       </ControlWrapper>
       <ResizableCancas ref={canvasRef}/>
-      <ProgressWrapper>
-        <Transition visible={props.scanResult.running} animation='scale' duration={500}>
-          <Progress percent={Math.round(props.scanResult.progress)} progress success={props.scanResult.finished}/>
-        </Transition>
-      </ProgressWrapper>
     </Wrapper>
   );
 }
 
+
+// <ProgressWrapper>
+//   <Transition visible={props.scanResult.running} animation='scale' duration={500}>
+//     <Progress percent={Math.round(props.scanResult.progress)} progress success={props.scanResult.finished}/>
+//   </Transition>
+// </ProgressWrapper>
+
 ScanView.propTypes = {
   patternPoints: PropTypes.array,
+  voronoi: PropTypes.object,
   boundingBoxSize: PropTypes.object,
   boundingBoxPosition: PropTypes.object,
   boundingBoxRotation: PropTypes.number,
   scanRange: PropTypes.object,
+  scanStatistics: PropTypes.object,
   currentPosition: PropTypes.object,
-  scanResult: PropTypes.object,
   isPatternUploaded: PropTypes.bool,
   isScanResultUpToDate: PropTypes.bool
 };
